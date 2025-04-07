@@ -4,22 +4,60 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import LoadingBar from "@/components/LoadingBar";
+import { auth } from "@/lib/api-client";
+import { useToast } from "@/contexts/toast-context";
 
 export default function SignUp() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const { showToast } = useToast();
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      auth.initiateGoogleSignIn();
+    } catch (error) {
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to initiate Google sign in",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Redirect to dashboard
-    router.push("/dashboard");
+    try {
+      const response = await auth.register({ email, password, fullName });
+      
+      // Store token
+      localStorage.setItem("access_token", response.data.access_token);
+      
+      showToast({
+        type: "success",
+        title: "Success",
+        message: "Account created successfully!",
+      });
+      
+      router.push("/dashboard");
+    } catch (error: any) {
+      showToast({
+        type: "error",
+        title: "Error",
+        message: error.response?.data?.message || "Failed to create account",
+      });
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -36,7 +74,7 @@ export default function SignUp() {
           >
             <Link 
               href="/" 
-              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 lg:mb-6"
+              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 lg:mb-6 font-[family-name:var(--font-nunito)]"
             >
               <ArrowLeftIcon className="w-4 h-4" />
               Back to home
@@ -45,19 +83,16 @@ export default function SignUp() {
             <h1 className="text-3xl sm:text-4xl font-jedira mb-2 bg-gradient-to-r from-black via-purple-700 to-black text-transparent bg-clip-text">
               Create an account
             </h1>
-            <p className="text-gray-600 mb-4 lg:mb-6">
+            <p className="text-gray-600 mb-4 lg:mb-6 font-[family-name:var(--font-nunito)]">
               Get started with your event management
             </p>
 
+            {/* Commented out for future implementation
             <div className="space-y-2 lg:space-y-3 mb-4 lg:mb-6">
               <motion.button
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 lg:py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm"
-                onClick={() => {
-                  setIsLoading(true);
-                  setTimeout(() => router.push("/dashboard"), 2000);
-                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 lg:py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-[family-name:var(--font-nunito)]"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
@@ -71,11 +106,8 @@ export default function SignUp() {
               <motion.button
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 lg:py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm"
-                onClick={() => {
-                  setIsLoading(true);
-                  setTimeout(() => router.push("/dashboard"), 2000);
-                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 lg:py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-[family-name:var(--font-nunito)]"
+                onClick={handleGoogleSignIn}
               >
                 <svg className="w-5 h-5" viewBox="0 0 48 48">
                   <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" />
@@ -92,55 +124,75 @@ export default function SignUp() {
                 <div className="w-full border-t border-gray-200"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">or</span>
+                <span className="px-2 bg-white text-gray-500 font-[family-name:var(--font-nunito)]">or</span>
               </div>
             </div>
+            */}
 
             <form onSubmit={handleSignUp} className="space-y-3 lg:space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1 font-[family-name:var(--font-nunito)]">
                   Full Name
                 </label>
                 <input
                   type="text"
                   id="name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   placeholder="John Doe"
-                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm"
+                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
                 />
               </div>
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1 font-[family-name:var(--font-nunito)]">
                   Email
                 </label>
                 <input
                   type="email"
                   id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm"
+                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
                 />
               </div>
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1 font-[family-name:var(--font-nunito)]">
                   Password
                 </label>
-                <input
-                  type="password"
-                  id="password"
-                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? (
+                      <EyeSlashIcon className="h-5 w-5" />
+                    ) : (
+                      <EyeIcon className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <motion.button
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 type="submit"
-                className="w-full bg-black text-white py-2 lg:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-sm"
+                className="w-full bg-black text-white py-2 lg:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-sm font-[family-name:var(--font-nunito)]"
               >
                 Create Account
               </motion.button>
             </form>
 
-            <p className="mt-4 lg:mt-6 text-center text-sm text-gray-600">
+            <p className="mt-4 lg:mt-6 text-center text-sm text-gray-600 font-[family-name:var(--font-nunito)]">
               Already have an account?{" "}
               <Link href="/auth/signin" className="text-purple-600 hover:text-purple-700 font-medium">
                 Sign In
