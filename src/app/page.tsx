@@ -4,6 +4,7 @@ import Footer from "@/components/footer";
 import Navbar from "@/components/navbar";
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 // Animation variants
 const containerVariants = {
@@ -119,8 +120,44 @@ export default function Home() {
             </motion.div>
           </motion.div>
 
-          {/* Right side - Placeholder for future image */}
-          <div className="hidden md:block md:w-1/2"></div>
+          {/* Right side - Browser Frame with Dashboard Image */}
+          <motion.div 
+            className="hidden md:block md:w-1/2 pl-8"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <div className="relative w-full aspect-[16/10] bg-white rounded-xl overflow-hidden shadow-2xl">
+              {/* Browser Frame */}
+              <div className="absolute inset-x-0 top-0 h-10 bg-gray-50 border-b border-gray-200 flex items-center px-4 gap-2">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-gray-300" />
+                  <div className="w-3 h-3 rounded-full bg-gray-300" />
+                  <div className="w-3 h-3 rounded-full bg-gray-300" />
+                </div>
+                <div className="flex-1 mx-4">
+                  <div className="w-full h-6 bg-white rounded-md border border-gray-200 flex items-center px-3">
+                    <div className="w-4 h-4 rounded-full bg-gray-100" />
+                    <div className="h-2 w-32 bg-gray-100 rounded ml-2" />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Dashboard Image without Blur Effect */}
+              <div className="absolute inset-0 mt-10">
+                <div className="relative w-full h-full">
+                  <Image
+                    src="/images/dash.png"
+                    alt="Dashboard Preview"
+                    fill
+                    className="object-contain object-top"
+                    quality={100}
+                    priority
+                  />
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </main>
       </div>
 

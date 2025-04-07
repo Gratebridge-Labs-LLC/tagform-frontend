@@ -26,8 +26,9 @@ import {
 
 const navigation = [
   { name: "Forms", href: "/dashboard", current: true },
-  { name: "Integrations", href: "/dashboard/integrations", current: false },
-  { name: "Brand kit", href: "/dashboard/brand-kit", current: false },
+  // Commented out for future use
+  // { name: "Integrations", href: "/dashboard/integrations", current: false },
+  // { name: "Brand kit", href: "/dashboard/brand-kit", current: false },
 ];
 
 // Sample forms data
@@ -289,12 +290,111 @@ const AnalyticsModal = ({ form, onClose }: AnalyticsModalProps) => {
   );
 };
 
+interface CreateWorkspaceModalProps {
+  onClose: () => void;
+  onSubmit: (name: string, type: 'private' | 'public') => void;
+}
+
+const CreateWorkspaceModal = ({ onClose, onSubmit }: CreateWorkspaceModalProps) => {
+  const [name, setName] = useState('');
+  const [type, setType] = useState<'private' | 'public'>('private');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(name, type);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white w-[400px] rounded-xl">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">Create Workspace</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors">
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <div>
+            <label htmlFor="workspace-name" className="block text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-2">
+              Workspace Name
+            </label>
+            <input
+              type="text"
+              id="workspace-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900"
+              placeholder="Enter workspace name"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-3">
+              Workspace Type
+            </label>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="workspace-type"
+                  value="private"
+                  checked={type === 'private'}
+                  onChange={(e) => setType(e.target.value as 'private' | 'public')}
+                  className="text-black focus:ring-0 focus:ring-offset-0"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">Private</p>
+                  <p className="text-sm text-gray-500 font-[family-name:var(--font-nunito)]">Only you can access this workspace</p>
+                </div>
+              </label>
+              <div className="relative">
+                <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-not-allowed bg-gray-50">
+                  <input
+                    type="radio"
+                    name="workspace-type"
+                    value="public"
+                    disabled
+                    className="text-gray-300 focus:ring-0 focus:ring-offset-0"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">Public</p>
+                      <span className="px-2 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-full font-[family-name:var(--font-nunito)]">Coming Soon</span>
+                    </div>
+                    <p className="text-sm text-gray-500 font-[family-name:var(--font-nunito)]">Anyone with the link can access</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-700 font-[family-name:var(--font-nunito)] hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 text-sm text-white font-[family-name:var(--font-nunito)] bg-black hover:bg-gray-900 rounded-lg transition-colors"
+            >
+              Create Workspace
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const [isPrivateExpanded, setIsPrivateExpanded] = useState(true);
   const [isPublicExpanded, setIsPublicExpanded] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [showActionsFor, setShowActionsFor] = useState<string | null>(null);
   const [selectedForm, setSelectedForm] = useState<typeof sampleForms[0] | null>(null);
+  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
 
   const handleActionClick = (formId: string) => {
     setShowActionsFor(showActionsFor === formId ? null : formId);
@@ -308,6 +408,12 @@ export default function Dashboard() {
   const handleViewAnalytics = (form: typeof sampleForms[0]) => {
     setSelectedForm(form);
     setShowActionsFor(null);
+  };
+
+  const handleCreateWorkspace = (name: string, type: 'private' | 'public') => {
+    // Here you would typically make an API call to create the workspace
+    console.log('Creating workspace:', { name, type });
+    setShowCreateWorkspace(false);
   };
 
   return (
@@ -339,7 +445,10 @@ export default function Dashboard() {
           <div className="px-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-jedira-italic text-gray-900">Workspaces</span>
-              <button className="p-1 hover:bg-white rounded">
+              <button 
+                onClick={() => setShowCreateWorkspace(true)}
+                className="p-1 hover:bg-white rounded"
+              >
                 <PlusIcon className="w-4 h-4 text-gray-500" />
               </button>
             </div>
@@ -373,25 +482,14 @@ export default function Dashboard() {
               <div>
                 <button 
                   onClick={() => setIsPublicExpanded(!isPublicExpanded)}
-                  className="w-full flex items-center justify-between group px-2 py-1.5 bg-white rounded hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between group px-2 py-1.5 bg-gray-50 rounded cursor-not-allowed"
                 >
-                  <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">Public</span>
-                  {isPublicExpanded ? (
-                    <ChevronUpIcon className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                  )}
-                </button>
-                {isPublicExpanded && (
-                  <div className="mt-0.5 ml-2 space-y-0.5">
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-gray-100 rounded">
-                      <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">Team workspace</span>
-                      <span className="text-xs font-[family-name:var(--font-nunito)] text-gray-500">
-                        {sampleForms.filter(f => !f.isPrivate).length}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">Public</span>
+                    <span className="px-2 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-full font-[family-name:var(--font-nunito)]">Coming Soon</span>
                   </div>
-                )}
+                  <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                </button>
               </div>
             </div>
           </div>
@@ -422,15 +520,8 @@ export default function Dashboard() {
           <div className="bg-[#f7f7f8] flex-1 rounded-b-2xl flex flex-col">
             {/* Workspace header */}
             <div className="flex items-center justify-between py-4 px-8 border-b border-gray-200">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center">
                 <h1 className="text-2xl font-jedira-italic text-gray-900">My workspace</h1>
-                <button className="text-gray-400 hover:text-gray-600">
-                  <EllipsisHorizontalIcon className="w-5 h-5" />
-                </button>
-                <button className="flex items-center gap-1.5 text-sm font-[family-name:var(--font-nunito)] text-gray-500 hover:text-gray-700">
-                  <UserPlusIcon className="w-4 h-4" />
-                  <span>Invite</span>
-                </button>
               </div>
               <div className="flex items-center gap-3">
                 <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-[family-name:var(--font-nunito)] text-gray-700 hover:bg-white rounded-md">
@@ -620,6 +711,14 @@ export default function Dashboard() {
         <AnalyticsModal
           form={selectedForm}
           onClose={() => setSelectedForm(null)}
+        />
+      )}
+
+      {/* Create Workspace Modal */}
+      {showCreateWorkspace && (
+        <CreateWorkspaceModal
+          onClose={() => setShowCreateWorkspace(false)}
+          onSubmit={handleCreateWorkspace}
         />
       )}
     </>
