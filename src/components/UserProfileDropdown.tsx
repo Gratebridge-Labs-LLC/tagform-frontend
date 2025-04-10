@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { Menu, Transition } from "@headlessui/react";
 import { UserCircleIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
@@ -11,10 +11,15 @@ export default function UserProfileDropdown() {
   const router = useRouter();
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
 
-  // Get user from localStorage
-  const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : null;
-  const fullName = user?.user_metadata?.full_name || "User";
+  useEffect(() => {
+    // Get user from localStorage after component mounts
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    setUserData(user);
+  }, []);
+
+  const fullName = userData?.user_metadata?.full_name || "User";
   const initials = fullName
     .split(" ")
     .map((n: string) => n[0])
@@ -79,7 +84,7 @@ export default function UserProfileDropdown() {
                   } flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 font-[family-name:var(--font-nunito)]`}
                 >
                   <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                  Logout
+                  {isLoading ? "Logging out..." : "Logout"}
                 </button>
               )}
             </Menu.Item>

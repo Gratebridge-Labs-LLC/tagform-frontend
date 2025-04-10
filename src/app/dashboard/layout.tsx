@@ -48,9 +48,9 @@ export default function DashboardLayout({
             <button className="text-gray-400 hover:text-gray-600">
               <QuestionMarkCircleIcon className="w-5 h-5" />
             </button>
-            <div className="h-8 w-8 rounded-full bg-[#FF6B00] flex items-center justify-center text-white text-sm font-medium">
+            {/* <div className="h-8 w-8 rounded-full bg-[#FF6B00] flex items-center justify-center text-white text-sm font-medium">
               {initials}
-            </div>
+            </div> */}
           </div>
         </div>
       </header>

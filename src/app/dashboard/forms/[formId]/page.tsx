@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
+import apiClient from "@/lib/api-client";
 import {
   EllipsisHorizontalIcon,
   ChevronDownIcon,
@@ -41,6 +42,7 @@ import {
   TableCellsIcon,
   ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
+import { useToast } from "@/contexts/toast-context";
 
 const questionTypes = [
   {
@@ -137,19 +139,40 @@ const questionTypes = [
   },
 ];
 
+type QuestionType = 
+  | 'multiple-choice'
+  | 'dropdown'
+  | 'yes-no'
+  | 'checkbox'
+  | 'short-text'
+  | 'long-text'
+  | 'email'
+  | 'phone'
+  | 'address'
+  | 'website'
+  | 'date';
+
 interface QuestionChoice {
   id: string;
+  questionId: string;
   text: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Question {
   id: string;
-  type: string;
+  formId: string;
+  type: QuestionType;
   text: string;
-  isRequired: boolean;
-  maxChars?: number | null;
-  choices?: QuestionChoice[];
   description?: string;
+  isRequired: boolean;
+  maxChars?: number;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+  choices?: QuestionChoice[];
 }
 
 // Update TOP_QUESTION_TYPES to match the new structure
@@ -192,18 +215,18 @@ const TOP_QUESTION_TYPES = [
 ];
 
 interface FormSettings {
-  landingPage: {
-    title: string;
-    description: string;
-    buttonText: string;
-    showProgress: boolean;
-  };
-  endingPage: {
-    title: string;
-    description: string;
-    buttonText: string;
-    redirectUrl?: string;
-  };
+  id: string;
+  formId: string;
+  landingPageTitle: string;
+  landingPageDescription?: string;
+  landingPageButtonText: string;
+  showProgressBar: boolean;
+  endingPageTitle: string;
+  endingPageDescription?: string;
+  endingPageButtonText: string;
+  redirectUrl?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface PageSettingsModalProps {
@@ -286,14 +309,11 @@ const PageSettingsModal = ({
                 </label>
                 <input
                   type="text"
-                  value={localSettings.landingPage.title}
+                  value={localSettings.landingPageTitle}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      landingPage: {
-                        ...localSettings.landingPage,
-                        title: e.target.value,
-                      },
+                      landingPageTitle: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900"
@@ -305,14 +325,11 @@ const PageSettingsModal = ({
                   Description
                 </label>
                 <textarea
-                  value={localSettings.landingPage.description}
+                  value={localSettings.landingPageDescription}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      landingPage: {
-                        ...localSettings.landingPage,
-                        description: e.target.value,
-                      },
+                      landingPageDescription: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900 resize-none"
@@ -326,14 +343,11 @@ const PageSettingsModal = ({
                 </label>
                 <input
                   type="text"
-                  value={localSettings.landingPage.buttonText}
+                  value={localSettings.landingPageButtonText}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      landingPage: {
-                        ...localSettings.landingPage,
-                        buttonText: e.target.value,
-                      },
+                      landingPageButtonText: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900"
@@ -344,14 +358,11 @@ const PageSettingsModal = ({
                 <input
                   type="checkbox"
                   id="showProgress"
-                  checked={localSettings.landingPage.showProgress}
+                  checked={localSettings.showProgressBar}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      landingPage: {
-                        ...localSettings.landingPage,
-                        showProgress: e.target.checked,
-                      },
+                      showProgressBar: e.target.checked,
                     })
                   }
                   className="h-4 w-4 text-black focus:ring-0 focus:ring-offset-0 rounded border-gray-300"
@@ -375,14 +386,11 @@ const PageSettingsModal = ({
                 </label>
                 <input
                   type="text"
-                  value={localSettings.endingPage.title}
+                  value={localSettings.endingPageTitle}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      endingPage: {
-                        ...localSettings.endingPage,
-                        title: e.target.value,
-                      },
+                      endingPageTitle: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900"
@@ -394,14 +402,11 @@ const PageSettingsModal = ({
                   Description
                 </label>
                 <textarea
-                  value={localSettings.endingPage.description}
+                  value={localSettings.endingPageDescription}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      endingPage: {
-                        ...localSettings.endingPage,
-                        description: e.target.value,
-                      },
+                      endingPageDescription: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900 resize-none"
@@ -415,14 +420,11 @@ const PageSettingsModal = ({
                 </label>
                 <input
                   type="text"
-                  value={localSettings.endingPage.buttonText}
+                  value={localSettings.endingPageButtonText}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      endingPage: {
-                        ...localSettings.endingPage,
-                        buttonText: e.target.value,
-                      },
+                      endingPageButtonText: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900"
@@ -435,14 +437,11 @@ const PageSettingsModal = ({
                 </label>
                 <input
                   type="url"
-                  value={localSettings.endingPage.redirectUrl}
+                  value={localSettings.redirectUrl}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      endingPage: {
-                        ...localSettings.endingPage,
-                        redirectUrl: e.target.value,
-                      },
+                      redirectUrl: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900"
@@ -814,42 +813,318 @@ const sampleForms = [
   },
 ];
 
+interface Form {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string;
+  isPrivate: boolean;
+  createdAt: string;
+  updatedAt: string;
+  questions: Question[];
+  settings: FormSettings;
+  isDirty: boolean;
+  lastSaved?: string;
+}
+
 export default function FormEditor() {
   const router = useRouter();
-  const [formName, setFormName] = useState("My new form");
+  const params = useParams();
+  const { showToast } = useToast();
+  
+  // Get the active workspace from localStorage
+  const activeWorkspace = localStorage.getItem('activeWorkspace');
+  const workspace = activeWorkspace ? JSON.parse(activeWorkspace) : null;
+  
+  const [form, setForm] = useState<Form>({
+    id: params.formId as string,
+    workspaceId: workspace?.id || "", // Set workspace ID from localStorage
+    name: `Untitled Form ${Math.floor(Math.random() * 1000)}`,
+    isPrivate: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    questions: [
+      {
+        id: "1",
+        formId: params.formId as string,
+        type: "short-text",
+        text: "Untitled question",
+        isRequired: false,
+        order: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+    settings: {
+      id: "",
+      formId: params.formId as string,
+      landingPageTitle: "Welcome to the Form",
+      landingPageDescription: "Please fill out this form to help us understand your needs better.",
+      landingPageButtonText: "Start",
+      showProgressBar: true,
+      endingPageTitle: "Thank You!",
+      endingPageDescription: "Your response has been recorded. We appreciate your time.",
+      endingPageButtonText: "Submit Another Response",
+      redirectUrl: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    isDirty: false,
+  });
   const [isEditingName, setIsEditingName] = useState(false);
   const [showQuestionTypes, setShowQuestionTypes] = useState(false);
-  const [questions, setQuestions] = useState<Question[]>([
-    {
-      id: "1",
-      type: "short-text",
-      text: "Untitled question",
-      isRequired: false,
-    },
-  ]);
   const [currentQuestionId, setCurrentQuestionId] = useState("1");
-  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">(
-    "desktop"
-  );
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [showSettings, setShowSettings] = useState(false);
   const [showPageSettings, setShowPageSettings] = useState(false);
-  const [formSettings, setFormSettings] = useState<FormSettings>({
-    landingPage: {
-      title: "Welcome to the Form",
-      description:
-        "Please fill out this form to help us understand your needs better.",
-      buttonText: "Start",
-      showProgress: true,
-    },
-    endingPage: {
-      title: "Thank You!",
-      description: "Your response has been recorded. We appreciate your time.",
-      buttonText: "Submit Another Response",
-      redirectUrl: "",
-    },
-  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [showCreateButton, setShowCreateButton] = useState(true);
 
-  const currentQuestion = questions.find((q) => q.id === currentQuestionId);
+  // Fetch form data on mount
+  useEffect(() => {
+    const fetchForm = async () => {
+      try {
+        if (!workspace) {
+          showToast({
+            type: "error",
+            title: "Error",
+            message: "No workspace selected. Please select a workspace first.",
+            duration: 3000
+          });
+          router.push('/dashboard');
+          return;
+        }
+
+        try {
+          const response = await apiClient.get<Form>(`/workspaces/${workspace.id}/forms/${params.formId}`);
+          setForm(prev => ({
+            ...response.data,
+            isDirty: false,
+          }));
+        } catch (error: any) {
+          console.error('Failed to fetch form:', error);
+          // If form doesn't exist, create a new one
+          if (error.response?.status === 404) {
+            await handleCreateForm(workspace.id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to get active workspace:', error);
+        router.push('/dashboard');
+      }
+    };
+
+    fetchForm();
+  }, [params.formId, workspace]);
+
+  const handleCreateForm = async (workspaceId: string) => {
+    try {
+      const response = await apiClient.post<Form>(`/workspaces/${workspaceId}/forms`, {
+        name: form.name,
+        description: form.description,
+        is_private: form.isPrivate,
+      });
+      setForm(prev => ({
+        ...response.data,
+        isDirty: false,
+      }));
+    } catch (error) {
+      console.error('Failed to create form:', error);
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to create form. Please try again.",
+        duration: 3000
+      });
+    }
+  };
+
+  const handleCreate = async () => {
+    try {
+      // Check for untitled questions
+      const untitledQuestions = form.questions.filter(q => q.text === "Untitled question");
+      if (untitledQuestions.length > 0) {
+        showToast({
+          type: "error",
+          title: "Error",
+          message: "Please update all untitled questions before creating the form",
+          duration: 3000
+        });
+        return;
+      }
+
+      setIsCreating(true);
+      
+      // Create form
+      const response = await apiClient.post<Form>(`/workspaces/${form.workspaceId}/forms`, {
+        name: form.name,
+        description: form.description,
+        is_private: form.isPrivate,
+        questions: form.questions.map(q => ({
+          type: q.type,
+          text: q.text,
+          description: q.description,
+          is_required: q.isRequired,
+          max_chars: q.maxChars,
+          order: q.order,
+          choices: q.choices?.map(c => ({
+            text: c.text,
+            order: c.order
+          }))
+        }))
+      });
+
+      setForm(prev => ({
+        ...response.data,
+        isDirty: false,
+        lastSaved: new Date().toISOString()
+      }));
+      
+      setShowCreateButton(false);
+    } catch (error) {
+      console.error('Failed to create form:', error);
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to create form. Please try again.",
+        duration: 3000
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      
+      // Update form
+      await apiClient.put(`/workspaces/${form.workspaceId}/forms/${form.id}`, {
+        name: form.name,
+        description: form.description,
+        is_private: form.isPrivate,
+      });
+
+      // Update questions
+      for (const question of form.questions) {
+        if (question.id.startsWith('temp-')) {
+          // Create new question
+          const response = await apiClient.post<Question>(`/workspaces/${form.workspaceId}/forms/${form.id}/questions`, {
+            type: question.type,
+            text: question.text,
+            description: question.description,
+            is_required: question.isRequired,
+            max_chars: question.maxChars,
+            order: question.order,
+            choices: question.choices?.map(c => ({
+              text: c.text,
+              order: c.order
+            }))
+          });
+          
+          // Update choices if needed
+          if (question.choices?.length) {
+            for (const choice of question.choices) {
+              await apiClient.post(`/workspaces/${form.workspaceId}/forms/${form.id}/questions/${response.data.id}/choices`, {
+                text: choice.text,
+                order: choice.order,
+              });
+            }
+          }
+        } else {
+          // Update existing question
+          await apiClient.put(`/workspaces/${form.workspaceId}/forms/${form.id}/questions/${question.id}`, {
+            text: question.text,
+            description: question.description,
+            is_required: question.isRequired,
+            max_chars: question.maxChars,
+            order: question.order,
+            choices: question.choices?.map(c => ({
+              text: c.text,
+              order: c.order
+            }))
+          });
+        }
+      }
+
+      // Update settings
+      await apiClient.put(`/workspaces/${form.workspaceId}/forms/${form.id}/settings`, {
+        landing_page_title: form.settings.landingPageTitle,
+        landing_page_description: form.settings.landingPageDescription,
+        landing_page_button_text: form.settings.landingPageButtonText,
+        show_progress_bar: form.settings.showProgressBar,
+        ending_page_title: form.settings.endingPageTitle,
+        ending_page_description: form.settings.endingPageDescription,
+        ending_page_button_text: form.settings.endingPageButtonText,
+        redirect_url: form.settings.redirectUrl,
+      });
+
+      setForm(prev => ({
+        ...prev,
+        isDirty: false,
+        lastSaved: new Date().toISOString(),
+      }));
+    } catch (error) {
+      console.error('Failed to save form:', error);
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to save form. Please try again.",
+        duration: 3000
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFormNameChange = (name: string) => {
+    setForm(prev => ({
+      ...prev,
+      name,
+      isDirty: true
+    }));
+  };
+
+  const handleQuestionChange = (questionId: string, updates: Partial<Question>) => {
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
+        q.id === questionId ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q
+      ),
+      isDirty: true
+    }));
+  };
+
+  const handleAddQuestion = (typeId: string) => {
+    const newQuestion: Question = {
+      id: `temp-${Date.now()}`,
+      formId: form.id,
+      type: typeId as QuestionType,
+      text: "Untitled question",
+      isRequired: false,
+      order: form.questions.length + 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...getQuestionTemplate(typeId),
+    };
+    setForm(prev => ({
+      ...prev,
+      questions: [...prev.questions, newQuestion],
+      isDirty: true
+    }));
+    setCurrentQuestionId(newQuestion.id);
+  };
+
+  const handleSettingsChange = (settings: FormSettings) => {
+    setForm(prev => ({
+      ...prev,
+      settings,
+      isDirty: true
+    }));
+  };
+
+  const currentQuestion = form.questions.find((q) => q.id === currentQuestionId);
 
   const handleClose = () => {
     router.push("/dashboard");
@@ -862,16 +1137,16 @@ export default function FormEditor() {
       case "checkbox":
         return {
           choices: [
-            { id: "1", text: "Option 1" },
-            { id: "2", text: "Option 2" },
-            { id: "3", text: "Option 3" },
+            { id: "1", questionId: "temp", text: "Option 1", order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: "2", questionId: "temp", text: "Option 2", order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: "3", questionId: "temp", text: "Option 3", order: 3, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
           ],
         };
       case "yes-no":
         return {
           choices: [
-            { id: "1", text: "Yes" },
-            { id: "2", text: "No" },
+            { id: "1", questionId: "temp", text: "Yes", order: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: "2", questionId: "temp", text: "No", order: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
           ],
         };
       default:
@@ -879,60 +1154,68 @@ export default function FormEditor() {
     }
   };
 
-  const handleQuestionTypeChange = (typeId: string) => {
-    const template = getQuestionTemplate(typeId);
-    // Only change type of existing question
-    setQuestions(
-      questions.map((q) =>
-        q.id === currentQuestionId ? { ...q, type: typeId, ...template } : q
-      )
-    );
-    setShowQuestionTypes(false);
-  };
-
-  const handleAddNewQuestion = (typeId: string) => {
-    const template = getQuestionTemplate(typeId);
-    const newQuestion: Question = {
-      id: String(Date.now()),
-      type: typeId,
-      text: "Untitled question",
+  const handleQuestionTypeChange = (typeId: QuestionType) => {
+    const template = {
       isRequired: false,
-      ...template,
+      maxChars: typeId === 'short-text' ? 100 : undefined
     };
-    const updatedQuestions = [...questions, newQuestion];
-    setQuestions(updatedQuestions);
-    setCurrentQuestionId(newQuestion.id);
-    setShowQuestionTypes(false);
+
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
+        q.id === currentQuestionId ? { ...q, type: typeId, ...template } : q
+      ),
+      isDirty: true
+    }));
   };
 
   const handleQuestionTextChange = (text: string) => {
-    setQuestions(
-      questions.map((q) => (q.id === currentQuestionId ? { ...q, text } : q))
-    );
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
+        q.id === currentQuestionId ? { ...q, text } : q
+      ),
+      isDirty: true
+    }));
   };
 
-  const handleDeleteQuestion = (id: string) => {
-    if (questions.length > 1) {
-      const newQuestions = questions.filter((q) => q.id !== id);
-      setQuestions(newQuestions);
-      setCurrentQuestionId(newQuestions[0].id);
+  const handleDeleteQuestion = async (id: string) => {
+    if (form.questions.length > 1) {
+      try {
+        if (!id.startsWith('temp-')) {
+          await apiClient.delete(`/workspaces/${form.workspaceId}/forms/${form.id}/questions/${id}`);
+        }
+        const newQuestions = form.questions.filter(q => q.id !== id);
+        setForm(prev => ({
+          ...prev,
+          questions: newQuestions,
+          isDirty: true
+        }));
+        setCurrentQuestionId(newQuestions[0].id);
+      } catch (error) {
+        console.error('Failed to delete question:', error);
+      }
     }
   };
 
   const handleRequiredChange = (isRequired: boolean) => {
-    setQuestions(
-      questions.map((q) =>
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
         q.id === currentQuestionId ? { ...q, isRequired } : q
-      )
-    );
+      ),
+      isDirty: true
+    }));
   };
 
-  const handleMaxCharsChange = (maxChars: number | null) => {
-    setQuestions(
-      questions.map((q) =>
+  const handleMaxCharsChange = (maxChars: number | undefined) => {
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
         q.id === currentQuestionId ? { ...q, maxChars } : q
-      )
-    );
+      ),
+      isDirty: true
+    }));
   };
 
   const getQuestionTypeInfo = (typeId: string) => {
@@ -965,8 +1248,9 @@ export default function FormEditor() {
     choiceId: string,
     text: string
   ) => {
-    setQuestions(
-      questions.map((q) =>
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
         q.id === questionId
           ? {
               ...q,
@@ -975,209 +1259,114 @@ export default function FormEditor() {
               ),
             }
           : q
-      )
-    );
+      ),
+      isDirty: true
+    }));
   };
 
-  const handleAddChoice = (questionId: string) => {
-    setQuestions(
-      questions.map((q) =>
-        q.id === questionId
-          ? {
-              ...q,
-              choices: [
-                ...(q.choices || []),
-                {
-                  id: String(Date.now()),
-                  text: `Option ${(q.choices?.length || 0) + 1}`,
-                },
-              ],
-            }
-          : q
-      )
-    );
+  const handleAddChoice = () => {
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => {
+        if (q.id === currentQuestionId) {
+          const newChoice: QuestionChoice = {
+            id: `temp-${Date.now()}`,
+            questionId: q.id,
+            text: "New choice",
+            order: (q.choices?.length || 0) + 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          return {
+            ...q,
+            choices: [...(q.choices || []), newChoice]
+          };
+        }
+        return q;
+      }),
+      isDirty: true
+    }));
   };
 
-  const handleRemoveChoice = (questionId: string, choiceId: string) => {
-    setQuestions(
-      questions.map((q) =>
-        q.id === questionId
-          ? {
-              ...q,
-              choices: q.choices?.filter((c) => c.id !== choiceId),
-            }
-          : q
-      )
-    );
+  const handleDeleteChoice = (choiceId: string) => {
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => {
+        if (q.id === currentQuestionId) {
+          return {
+            ...q,
+            choices: q.choices?.filter(c => c.id !== choiceId)
+          };
+        }
+        return q;
+      }),
+      isDirty: true
+    }));
+  };
+
+  const handleReorder = (reorderedQuestions: Question[]) => {
+    setForm(prev => ({
+      ...prev,
+      questions: reorderedQuestions,
+      isDirty: true
+    }));
   };
 
   const renderQuestionPreview = (question: Question) => {
     switch (question.type) {
-      case "multiple-choice":
-        return (
-          <div className="space-y-2.5">
-            {question.choices?.map((choice) => (
-              <div
-                key={choice.id}
-                className="flex items-center gap-3 p-2 rounded-lg"
-              >
-                <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center group hover:border-blue-500 cursor-pointer transition-colors">
-                  <div className="w-2.5 h-2.5 rounded-full bg-transparent group-hover:bg-blue-500" />
-                </div>
-                <span className="text-gray-600 font-[family-name:var(--font-nunito)]">
-                  {choice.text}
-                </span>
-              </div>
-            ))}
-          </div>
-        );
-      case "checkbox":
-        return (
-          <div className="space-y-2.5">
-            {question.choices?.map((choice) => (
-              <div
-                key={choice.id}
-                className="flex items-center gap-3 p-2 rounded-lg"
-              >
-                <div className="w-5 h-5 border-2 border-gray-300 flex items-center justify-center group hover:border-blue-500 cursor-pointer transition-colors">
-                  <div className="w-3 h-3 bg-transparent group-hover:bg-blue-500" />
-                </div>
-                <span className="text-gray-600 font-[family-name:var(--font-nunito)]">
-                  {choice.text}
-                </span>
-              </div>
-            ))}
-          </div>
-        );
-      case "dropdown":
-        return (
-          <div className="relative">
-            <button
-              type="button"
-              className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-left text-gray-600 font-[family-name:var(--font-nunito)] flex items-center justify-between cursor-pointer group"
-              onClick={(e) => {
-                // Prevent the click from propagating
-                e.preventDefault();
-                e.stopPropagation();
-                // Find the select element and show its dropdown
-                const select = e.currentTarget
-                  .nextElementSibling as HTMLSelectElement;
-                select.focus();
-                select.click();
-              }}
-            >
-              <span className="text-gray-400">Select an option</span>
-              <ChevronDownIcon className="w-5 h-5 text-gray-400" />
-            </button>
-            <select
-              className="absolute inset-0 w-full opacity-0 cursor-pointer"
-              disabled={false}
-              onChange={() => {}} // Empty onChange to prevent console warnings
-            >
-              <option value="" disabled selected>
-                Select an option
-              </option>
-              {question.choices?.map((choice) => (
-                <option key={choice.id} value={choice.id}>
-                  {choice.text}
-                </option>
-              ))}
-            </select>
-          </div>
-        );
-      case "yes-no":
-        return (
-          <div className="flex gap-3">
-            <button className="flex-1 px-6 py-2.5 border-2 border-gray-200 rounded-lg text-gray-700 font-medium font-[family-name:var(--font-nunito)] hover:bg-gray-50 hover:border-blue-500 transition-colors">
-              Yes
-            </button>
-            <button className="flex-1 px-6 py-2.5 border-2 border-gray-200 rounded-lg text-gray-700 font-medium font-[family-name:var(--font-nunito)] hover:bg-gray-50 hover:border-blue-500 transition-colors">
-              No
-            </button>
-          </div>
-        );
-      case "email":
-        return (
-          <div className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-lg transition-colors">
-            <EnvelopeIcon className="w-5 h-5 text-gray-400" />
-            <input
-              type="email"
-              className="flex-1 border-none bg-transparent text-gray-600 font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:ring-0"
-              placeholder="name@example.com"
-              disabled
-            />
-          </div>
-        );
-      case "website":
-        return (
-          <div className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-lg transition-colors">
-            <LinkIcon className="w-5 h-5 text-gray-400" />
-            <input
-              type="url"
-              className="flex-1 border-none bg-transparent text-gray-600 font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:ring-0"
-              placeholder="https://example.com"
-              disabled
-            />
-          </div>
-        );
-      case "phone":
-        return (
-          <div className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-lg transition-colors">
-            <PhoneIcon className="w-5 h-5 text-gray-400" />
-            <input
-              type="tel"
-              className="flex-1 border-none bg-transparent text-gray-600 font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:ring-0"
-              placeholder="(123) 456-7890"
-              disabled
-            />
-          </div>
-        );
-      case "address":
-        return (
-          <div className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-lg transition-colors">
-            <MapPinIcon className="w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              className="flex-1 border-none bg-transparent text-gray-600 font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:ring-0"
-              placeholder="Enter your address"
-              disabled
-            />
-          </div>
-        );
-      case "date":
-        return (
-          <div className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-lg transition-colors">
-            <CalendarIcon className="w-5 h-5 text-gray-400" />
-            <input
-              type="date"
-              className="flex-1 border-none bg-transparent text-gray-600 font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:ring-0"
-              disabled
-            />
-          </div>
-        );
-      case "long-text":
-        return (
-          <textarea
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-600 font-[family-name:var(--font-nunito)] placeholder-gray-400 resize-none focus:ring-0"
-            rows={5}
-            placeholder="Type your detailed answer here..."
-            disabled
-          />
-        );
-      default: // short-text
+      case 'short-text':
         return (
           <input
             type="text"
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-600 font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:ring-0"
-            placeholder="Type your answer here..."
+            placeholder="Short answer text"
+            className="w-full px-3 py-2 border rounded-md"
             disabled
           />
         );
+      case 'long-text':
+        return (
+          <textarea
+            placeholder="Long answer text"
+            className="w-full px-3 py-2 border rounded-md"
+            disabled
+          />
+        );
+      case 'multiple-choice':
+        return (
+          <div className="space-y-2">
+            {question.choices?.map((choice) => (
+              <div key={choice.id} className="flex items-center">
+                <input type="radio" disabled className="mr-2" />
+                <span>{choice.text}</span>
+              </div>
+            ))}
+          </div>
+        );
+      case 'checkbox':
+        return (
+          <div className="space-y-2">
+            {question.choices?.map((choice) => (
+              <div key={choice.id} className="flex items-center">
+                <input type="checkbox" disabled className="mr-2" />
+                <span>{choice.text}</span>
+              </div>
+            ))}
+          </div>
+        );
+      case 'dropdown':
+        return (
+          <select className="w-full px-3 py-2 border rounded-md" disabled>
+            <option value="">Select an option</option>
+            {question.choices?.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.text}
+              </option>
+            ))}
+          </select>
+        );
+      default:
+        return null;
     }
-  };
-
-  const handleReorder = (reorderedQuestions: Question[]) => {
-    setQuestions(reorderedQuestions);
   };
 
   return (
@@ -1215,8 +1404,8 @@ export default function FormEditor() {
                   {isEditingName ? (
                     <input
                       type="text"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
+                      value={form.name}
+                      onChange={(e) => handleFormNameChange(e.target.value)}
                       onBlur={() => setIsEditingName(false)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -1231,7 +1420,7 @@ export default function FormEditor() {
                       className="font-medium font-jedira cursor-pointer hover:text-gray-600"
                       onClick={() => setIsEditingName(true)}
                     >
-                      {formName}
+                      {form.name}
                     </span>
                   )}
                 </div>
@@ -1276,10 +1465,42 @@ export default function FormEditor() {
                 </div>
               </div>
 
-              {/* Right - Publish Button */}
-              <button className="flex items-center px-4 py-1.5 bg-emerald-600 text-white rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-emerald-700 transition-colors">
-                Publish
-              </button>
+              {/* Right - Save & Update Buttons */}
+              <div className="flex items-center gap-2">
+                {form.isDirty && (
+                  <button 
+                    onClick={handleSave}
+                    className="flex items-center px-4 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-gray-200 transition-colors"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-black rounded-full animate-spin mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save'
+                    )}
+                  </button>
+                )}
+                {showCreateButton && (
+                  <button 
+                    onClick={handleCreate}
+                    className="flex items-center px-4 py-1.5 bg-emerald-600 text-white rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-emerald-700 transition-colors"
+                  >
+                    {isCreating ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white rounded-full animate-spin mr-2" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create'
+                    )}
+                  </button>
+                )}
+                <button className="flex items-center px-4 py-1.5 bg-emerald-600 text-white rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-emerald-700 transition-colors">
+                  Update
+                </button>
+              </div>
             </header>
 
             <div className="flex h-[calc(100%-3.5rem)]">
@@ -1295,11 +1516,11 @@ export default function FormEditor() {
                   </button>
                   <Reorder.Group
                     axis="y"
-                    values={questions}
+                    values={form.questions}
                     onReorder={handleReorder}
                     className="space-y-2"
                   >
-                    {questions.map((question, index) => {
+                    {form.questions.map((question, index) => {
                       const typeInfo = getQuestionTypeInfo(question.type);
                       return (
                         <Reorder.Item
@@ -1355,7 +1576,7 @@ export default function FormEditor() {
                       <div className="p-6">
                         <div className="flex items-start gap-4">
                           <span className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-lg font-[family-name:var(--font-nunito)]">
-                            {questions.findIndex(
+                            {form.questions.findIndex(
                               (q) => q.id === currentQuestion.id
                             ) + 1}
                           </span>
@@ -1460,14 +1681,16 @@ export default function FormEditor() {
                                   <button
                                     key={item.id}
                                     onClick={() =>
-                                      handleAddNewQuestion(item.id)
+                                      handleAddQuestion(item.id)
                                     }
                                     className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
                                   >
                                     <div
                                       className={`p-2 rounded-lg ${item.bgColor}`}
                                     >
-                                      <item.icon className="w-5 h-5 text-gray-700" />
+                                      {React.createElement(item.icon, {
+                                        className: "w-5 h-5 text-gray-700",
+                                      })}
                                     </div>
                                     <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">
                                       {item.name}
@@ -1597,7 +1820,7 @@ export default function FormEditor() {
                             value={currentQuestion?.maxChars || ""}
                             onChange={(e) =>
                               handleMaxCharsChange(
-                                e.target.value ? Number(e.target.value) : null
+                                e.target.value ? Number(e.target.value) : undefined
                               )
                             }
                             className="w-20 px-2 py-1 text-sm border border-gray-200 rounded font-[family-name:var(--font-nunito)]"
@@ -1639,10 +1862,7 @@ export default function FormEditor() {
                                     currentQuestion.choices.length > 2 && (
                                       <button
                                         onClick={() =>
-                                          handleRemoveChoice(
-                                            currentQuestion.id,
-                                            choice.id
-                                          )
+                                          handleDeleteChoice(choice.id)
                                         }
                                         className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
                                       >
@@ -1652,9 +1872,7 @@ export default function FormEditor() {
                                 </div>
                               ))}
                               <button
-                                onClick={() =>
-                                  handleAddChoice(currentQuestion.id)
-                                }
+                                onClick={handleAddChoice}
                                 className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded border border-gray-200 transition-colors"
                               >
                                 <PlusIcon className="w-4 h-4" />
@@ -1666,7 +1884,7 @@ export default function FormEditor() {
                     </div>
                   </div>
                 </div>
-                {currentQuestion && questions.length > 1 && (
+                {currentQuestion && form.questions.length > 1 && (
                   <div className="p-4 border-t border-gray-200">
                     <button
                       onClick={() => handleDeleteQuestion(currentQuestion.id)}
@@ -1689,8 +1907,8 @@ export default function FormEditor() {
       {showPageSettings && (
         <PageSettingsModal
           onClose={() => setShowPageSettings(false)}
-          settings={formSettings}
-          onUpdate={setFormSettings}
+          settings={form.settings}
+          onUpdate={handleSettingsChange}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   EllipsisHorizontalIcon, 
   ChevronDownIcon,
@@ -24,6 +24,8 @@ import {
   BellIcon
 } from "@heroicons/react/24/outline";
 import UserProfileDropdown from "@/components/UserProfileDropdown";
+import apiClient from "@/lib/api-client";
+import { useToast } from "@/contexts/toast-context";
 
 const navigation = [
   { name: "Forms", href: "/dashboard", current: true },
@@ -69,7 +71,9 @@ const sampleForms = [
 ];
 
 // Function to get initials from title
-const getInitials = (title: string) => {
+const getInitials = (title: string | undefined) => {
+  if (!title?.trim()) return '';
+  
   return title
     .split(' ')
     .map(word => word[0])
@@ -81,11 +85,15 @@ const getInitials = (title: string) => {
 type Tab = 'overview' | 'submissions' | 'settings';
 
 interface AnalyticsModalProps {
-  form: typeof sampleForms[0];
+  form: Form;
   onClose: () => void;
 }
 
-const AnalyticsModal = ({ form, onClose }: AnalyticsModalProps) => {
+const AnalyticsModal = ({
+  form,
+  onClose,
+}: AnalyticsModalProps) => {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [notifySubmitter, setNotifySubmitter] = useState(true);
   const [notifyOwner, setNotifyOwner] = useState(true);
@@ -110,16 +118,22 @@ const AnalyticsModal = ({ form, onClose }: AnalyticsModalProps) => {
           <div className="space-y-8">
             <div className="grid grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-xl">
-                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Total Submissions</h4>
-                <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">{form.responses}</p>
+                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Form Status</h4>
+                <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
+                  {form.is_private ? 'Private' : 'Public'}
+                </p>
               </div>
               <div className="bg-white p-6 rounded-xl">
-                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Completion Rate</h4>
-                <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">85%</p>
+                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Last Updated</h4>
+                <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
+                  {new Date(form.updated_at).toLocaleDateString()}
+                </p>
               </div>
               <div className="bg-white p-6 rounded-xl">
-                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Avg. Time</h4>
-                <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">2m 30s</p>
+                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Created</h4>
+                <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
+                  {new Date(form.created_at).toLocaleDateString()}
+                </p>
               </div>
             </div>
             <div className="bg-white p-6 rounded-xl">
@@ -254,12 +268,12 @@ const AnalyticsModal = ({ form, onClose }: AnalyticsModalProps) => {
       <div className="bg-[#f7f7f8] w-[1000px] max-h-[90vh] rounded-xl flex flex-col">
         <div className="flex items-center justify-between p-8 border-b border-gray-200">
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 ${form.color} rounded-xl flex items-center justify-center text-white text-lg font-medium font-[family-name:var(--font-nunito)]`}>
-              {getInitials(form.title)}
+            <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white text-lg font-medium font-[family-name:var(--font-nunito)]">
+              {getInitials(form.name)}
             </div>
             <div>
-              <h2 className="text-2xl font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-1">{form.title}</h2>
-              <p className="text-sm text-gray-500 font-[family-name:var(--font-nunito)]">Created on {new Date(form.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              <h2 className="text-2xl font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-1">{form.name}</h2>
+              <p className="text-sm text-gray-500 font-[family-name:var(--font-nunito)]">Created on {new Date(form.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -294,9 +308,10 @@ const AnalyticsModal = ({ form, onClose }: AnalyticsModalProps) => {
 interface CreateWorkspaceModalProps {
   onClose: () => void;
   onSubmit: (name: string, type: 'private' | 'public') => void;
+  isLoading: boolean;
 }
 
-const CreateWorkspaceModal = ({ onClose, onSubmit }: CreateWorkspaceModalProps) => {
+const CreateWorkspaceModal = ({ onClose, onSubmit, isLoading }: CreateWorkspaceModalProps) => {
   const [name, setName] = useState('');
   const [type, setType] = useState<'private' | 'public'>('private');
 
@@ -380,7 +395,7 @@ const CreateWorkspaceModal = ({ onClose, onSubmit }: CreateWorkspaceModalProps) 
               type="submit"
               className="px-4 py-2 text-sm text-white font-[family-name:var(--font-nunito)] bg-black hover:bg-gray-900 rounded-lg transition-colors"
             >
-              Create Workspace
+              {isLoading ? 'Creating...' : 'Create Workspace'}
             </button>
           </div>
         </form>
@@ -389,13 +404,116 @@ const CreateWorkspaceModal = ({ onClose, onSubmit }: CreateWorkspaceModalProps) 
   );
 };
 
+interface Workspace {
+  id: string;
+  name: string;
+  type: 'private' | 'public';
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface WorkspaceResponse {
+  workspaces: Workspace[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+  };
+}
+
+interface Form {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  is_private: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FormResponse {
+  forms: Form[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number | null;
+  };
+}
+
 export default function Dashboard() {
+  const { showToast } = useToast();
   const [isPrivateExpanded, setIsPrivateExpanded] = useState(true);
   const [isPublicExpanded, setIsPublicExpanded] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [showActionsFor, setShowActionsFor] = useState<string | null>(null);
-  const [selectedForm, setSelectedForm] = useState<typeof sampleForms[0] | null>(null);
+  const [selectedForm, setSelectedForm] = useState<Form | null>(null);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
+  const [forms, setForms] = useState<Form[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingForms, setIsLoadingForms] = useState(false);
+
+  const fetchWorkspaces = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get<WorkspaceResponse>(`/workspaces?search=${searchQuery}`);
+      setWorkspaces(response.data.workspaces);
+      
+      // Select the first workspace by default if none is selected
+      const activeWorkspace = localStorage.getItem('activeWorkspace');
+      if (!activeWorkspace && response.data.workspaces.length > 0) {
+        const firstWorkspace = response.data.workspaces[0];
+        localStorage.setItem('activeWorkspace', JSON.stringify(firstWorkspace));
+        setActiveWorkspace(firstWorkspace);
+        await fetchForms(firstWorkspace.id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch workspaces:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch workspaces on mount
+  useEffect(() => {
+    fetchWorkspaces();
+  }, [searchQuery]);
+
+  // Fetch forms when active workspace changes
+  useEffect(() => {
+    if (activeWorkspace) {
+      fetchForms(activeWorkspace.id);
+    } else {
+      setForms([]);
+    }
+  }, [activeWorkspace]);
+
+  const fetchForms = async (workspaceId: string) => {
+    try {
+      setIsLoadingForms(true);
+      const response = await apiClient.get<FormResponse>(`/workspaces/${workspaceId}/forms`);
+      setForms(response.data.forms);
+    } catch (error) {
+      console.error('Failed to fetch forms:', error);
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to load forms',
+        duration: 3000,
+      });
+    } finally {
+      setIsLoadingForms(false);
+    }
+  };
+
+  const handleWorkspaceClick = async (workspace: Workspace) => {
+    setActiveWorkspace(workspace);
+    localStorage.setItem('activeWorkspace', JSON.stringify(workspace));
+    await fetchForms(workspace.id);
+  };
 
   const handleActionClick = (formId: string) => {
     setShowActionsFor(showActionsFor === formId ? null : formId);
@@ -406,15 +524,59 @@ export default function Dashboard() {
     setShowActionsFor(null);
   };
 
-  const handleViewAnalytics = (form: typeof sampleForms[0]) => {
+  const handleViewAnalytics = (form: Form) => {
     setSelectedForm(form);
     setShowActionsFor(null);
   };
 
-  const handleCreateWorkspace = (name: string, type: 'private' | 'public') => {
-    // Here you would typically make an API call to create the workspace
-    console.log('Creating workspace:', { name, type });
-    setShowCreateWorkspace(false);
+  const handleCreateWorkspace = async (name: string, type: 'private' | 'public') => {
+    try {
+      setIsLoading(true);
+      await apiClient.post('/workspaces', { name, type });
+      await fetchWorkspaces();
+      setShowCreateWorkspace(false);
+      showToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Workspace created successfully',
+        duration: 3000,
+      });
+    } catch (error: any) {
+      console.error('Failed to create workspace:', error);
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.error || 'Failed to create workspace',
+        duration: 3000,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteForm = async (formId: string) => {
+    try {
+      if (!activeWorkspace) return;
+      
+      await apiClient.delete(`/workspaces/${activeWorkspace.id}/forms/${formId}`);
+      setForms(forms.filter(form => form.id !== formId));
+      setShowActionsFor(null);
+      
+      showToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Form deleted successfully',
+        duration: 3000,
+      });
+    } catch (error: any) {
+      console.error('Failed to delete form:', error);
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.error || 'Failed to delete form',
+        duration: 3000,
+      });
+    }
   };
 
   return (
@@ -436,29 +598,31 @@ export default function Dashboard() {
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search"
-                className="w-full pl-9 pr-3 py-2 text-sm font-[family-name:var(--font-nunito)] bg-white border border-gray-200 rounded-md placeholder-gray-400 focus:outline-none focus:border-gray-300"
+                placeholder="Search workspaces"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm font-[family-name:var(--font-nunito)] text-black bg-white border border-gray-200 rounded-md placeholder-gray-400 focus:outline-none focus:border-gray-300"
               />
             </div>
           </div>
 
           {/* Workspaces */}
           <div className="px-4">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-jedira-italic text-gray-900">Workspaces</span>
               <button 
                 onClick={() => setShowCreateWorkspace(true)}
-                className="p-1 hover:bg-white rounded"
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <PlusIcon className="w-4 h-4 text-gray-500" />
               </button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {/* Private Workspace Section */}
               <div>
                 <button 
                   onClick={() => setIsPrivateExpanded(!isPrivateExpanded)}
-                  className="w-full flex items-center justify-between group px-2 py-1.5 bg-white rounded hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between group px-3 py-2 bg-white rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">Private</span>
                   {isPrivateExpanded ? (
@@ -468,13 +632,38 @@ export default function Dashboard() {
                   )}
                 </button>
                 {isPrivateExpanded && (
-                  <div className="mt-0.5 ml-2 space-y-0.5">
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-gray-100 rounded">
-                      <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">My workspace</span>
-                      <span className="text-xs font-[family-name:var(--font-nunito)] text-gray-500">
-                        {sampleForms.filter(f => f.isPrivate).length}
-                      </span>
-                    </div>
+                  <div className="mt-2 ml-3 space-y-2">
+                    {isLoading ? (
+                      <div className="flex items-center justify-center p-3">
+                        <div className="w-4 h-4 border-2 border-gray-200 border-t-black rounded-full animate-spin" />
+                      </div>
+                    ) : workspaces.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-500 bg-gray-50 rounded-lg">No workspaces found</div>
+                    ) : (
+                      workspaces.map((workspace) => (
+                        <div 
+                          key={workspace.id} 
+                          onClick={() => handleWorkspaceClick(workspace)}
+                          className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
+                            activeWorkspace?.id === workspace.id 
+                              ? 'bg-gray-100 shadow-sm' 
+                              : 'bg-white hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className={`w-2 h-2 rounded-full ${
+                            activeWorkspace?.id === workspace.id 
+                              ? 'bg-blue-500' 
+                              : 'bg-gray-300 group-hover:bg-blue-400'
+                          }`} />
+                          <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900 flex-1">
+                            {workspace.name}
+                          </span>
+                          {activeWorkspace?.id === workspace.id && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -483,11 +672,11 @@ export default function Dashboard() {
               <div>
                 <button 
                   onClick={() => setIsPublicExpanded(!isPublicExpanded)}
-                  className="w-full flex items-center justify-between group px-2 py-1.5 bg-gray-50 rounded cursor-not-allowed"
+                  className="w-full flex items-center justify-between group px-3 py-2 bg-gray-50 rounded-lg cursor-not-allowed opacity-50"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">Public</span>
-                    <span className="px-2 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-full font-[family-name:var(--font-nunito)]">Coming Soon</span>
+                    <span className="px-1.5 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-full font-[family-name:var(--font-nunito)]">Coming Soon</span>
                   </div>
                   <ChevronDownIcon className="w-4 h-4 text-gray-400" />
                 </button>
@@ -525,7 +714,9 @@ export default function Dashboard() {
             {/* Workspace header */}
             <div className="flex items-center justify-between py-4 px-8 border-b border-gray-200">
               <div className="flex items-center">
-                <h1 className="text-2xl font-jedira-italic text-gray-900">My workspace</h1>
+                <h1 className="text-2xl font-jedira-italic text-gray-900">
+                  {activeWorkspace ? activeWorkspace.name : 'Select a workspace'}
+                </h1>
               </div>
               <div className="flex items-center gap-3">
                 <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-[family-name:var(--font-nunito)] text-gray-700 hover:bg-white rounded-md">
@@ -551,8 +742,28 @@ export default function Dashboard() {
 
             {/* Forms list/grid */}
             <div className="flex-1 p-8">
-              {sampleForms.length === 0 ? (
-                // Empty state (commented out but preserved)
+              {!activeWorkspace ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                      <Squares2X2Icon className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-2xl font-jedira-italic text-gray-900 mb-2">Select a workspace</h3>
+                    <p className="text-sm font-[family-name:var(--font-nunito)] text-gray-500 mb-6 max-w-sm mx-auto">
+                      Choose a workspace from the sidebar to view its forms or create a new workspace.
+                    </p>
+                  </div>
+                </div>
+              ) : isLoadingForms ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                      <Squares2X2Icon className="w-8 h-8 text-gray-400 animate-pulse" />
+                    </div>
+                    <p className="text-sm font-[family-name:var(--font-nunito)] text-gray-500">Loading forms...</p>
+                  </div>
+                </div>
+              ) : forms.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
@@ -571,21 +782,21 @@ export default function Dashboard() {
               ) : viewMode === 'list' ? (
                 // List view
                 <div className="space-y-2">
-                  {sampleForms.map((form) => (
+                  {forms.map((form) => (
                     <div key={form.id} className="group flex items-center gap-4 p-4 bg-white rounded-lg hover:bg-gray-50">
                       <div className="relative">
-                        <div className={`w-12 h-12 ${form.color} rounded-lg flex items-center justify-center text-white font-medium font-[family-name:var(--font-nunito)]`}>
-                          {getInitials(form.title)}
+                        <div className={`w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center text-white font-medium font-[family-name:var(--font-nunito)]`}>
+                          {getInitials(form.name)}
                         </div>
-                        {form.isPrivate && (
+                        {form.is_private && (
                           <div className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center">
                             <LockClosedIcon className="w-3 h-3 text-gray-600" />
                           </div>
                         )}
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">{form.title}</h3>
-                        <p className="text-xs text-gray-500 font-[family-name:var(--font-nunito)]">{form.responses} responses</p>
+                        <h3 className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">{form.name}</h3>
+                        <p className="text-xs text-gray-500 font-[family-name:var(--font-nunito)]">Created {new Date(form.created_at).toLocaleDateString()}</p>
                       </div>
                       <div className="relative">
                         <button
@@ -596,13 +807,6 @@ export default function Dashboard() {
                         </button>
                         {showActionsFor === form.id && (
                           <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                            <button 
-                              onClick={() => handleViewAnalytics(form)}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
-                            >
-                              <ChartBarIcon className="w-4 h-4" />
-                              View
-                            </button>
                             <Link 
                               href={`/dashboard/forms/${form.id}`}
                               className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
@@ -624,6 +828,7 @@ export default function Dashboard() {
                               Duplicate
                             </button>
                             <button 
+                              onClick={() => handleDeleteForm(form.id)}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
                             >
                               <TrashIcon className="w-4 h-4" />
@@ -638,13 +843,13 @@ export default function Dashboard() {
               ) : (
                 // Grid view
                 <div className="grid grid-cols-3 gap-4">
-                  {sampleForms.map((form) => (
+                  {forms.map((form) => (
                     <div key={form.id} className="group bg-white rounded-lg p-4 hover:bg-gray-50">
                       <div className="relative mb-3">
-                        <div className={`w-full aspect-video ${form.color} rounded-lg flex items-center justify-center text-white text-2xl font-medium font-[family-name:var(--font-nunito)]`}>
-                          {getInitials(form.title)}
+                        <div className={`w-full aspect-video bg-blue-500 rounded-lg flex items-center justify-center text-white text-2xl font-medium font-[family-name:var(--font-nunito)]`}>
+                          {getInitials(form.name)}
                         </div>
-                        {form.isPrivate && (
+                        {form.is_private && (
                           <div className="absolute top-2 right-2 w-6 h-6 bg-white rounded-full flex items-center justify-center">
                             <LockClosedIcon className="w-4 h-4 text-gray-600" />
                           </div>
@@ -652,8 +857,8 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">{form.title}</h3>
-                          <p className="text-xs text-gray-500 font-[family-name:var(--font-nunito)]">{form.responses} responses</p>
+                          <h3 className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">{form.name}</h3>
+                          <p className="text-xs text-gray-500 font-[family-name:var(--font-nunito)]">Created {new Date(form.created_at).toLocaleDateString()}</p>
                         </div>
                         <div className="relative">
                           <button
@@ -664,13 +869,6 @@ export default function Dashboard() {
                           </button>
                           {showActionsFor === form.id && (
                             <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                              <button 
-                                onClick={() => handleViewAnalytics(form)}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
-                              >
-                                <ChartBarIcon className="w-4 h-4" />
-                                View
-                              </button>
                               <Link 
                                 href={`/dashboard/forms/${form.id}`}
                                 className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
@@ -692,6 +890,7 @@ export default function Dashboard() {
                                 Duplicate
                               </button>
                               <button 
+                                onClick={() => handleDeleteForm(form.id)}
                                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
                               >
                                 <TrashIcon className="w-4 h-4" />
@@ -723,6 +922,7 @@ export default function Dashboard() {
         <CreateWorkspaceModal
           onClose={() => setShowCreateWorkspace(false)}
           onSubmit={handleCreateWorkspace}
+          isLoading={isLoading}
         />
       )}
     </>
