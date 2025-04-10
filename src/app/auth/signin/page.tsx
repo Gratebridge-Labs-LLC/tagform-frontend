@@ -35,13 +35,25 @@ export default function SignIn() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    if (!email || !password) {
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Please fill in all fields",
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     try {
       const response = await auth.login({ email, password });
       
-      // Store token
-      localStorage.setItem("access_token", response.data.access_token);
+      // Store user details and tokens
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+      localStorage.setItem("access_token", response.data.session.access_token);
+      localStorage.setItem("refresh_token", response.data.session.refresh_token);
       
       showToast({
         type: "success",
@@ -51,11 +63,19 @@ export default function SignIn() {
       
       router.push("/dashboard");
     } catch (error: any) {
-      showToast({
-        type: "error",
-        title: "Error",
-        message: error.response?.data?.message || "Invalid email or password",
-      });
+      if (error.response?.status === 401) {
+        showToast({
+          type: "error",
+          title: "Error",
+          message: "Invalid email or password",
+        });
+      } else {
+        showToast({
+          type: "error",
+          title: "Error",
+          message: error.response?.data?.message || "An error occurred",
+        });
+      }
     } finally {
       setIsLoading(false);
     }

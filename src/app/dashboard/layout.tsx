@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
 
 const navigation = [
   { name: "Forms", href: "/dashboard", current: true },
@@ -15,6 +16,21 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const storedUser = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : null;
+    setUser(storedUser);
+  }, []);
+
+  const fullName = user?.user_metadata?.full_name || "User";
+  const initials = fullName
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
   return (
     <div className="min-h-screen bg-white">
       {/* Top Navigation */}
@@ -33,7 +49,7 @@ export default function DashboardLayout({
               <QuestionMarkCircleIcon className="w-5 h-5" />
             </button>
             <div className="h-8 w-8 rounded-full bg-[#FF6B00] flex items-center justify-center text-white text-sm font-medium">
-              VO
+              {initials}
             </div>
           </div>
         </div>

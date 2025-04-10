@@ -36,13 +36,25 @@ export default function SignUp() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    if (!fullName || !email || !password) {
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Please fill in all fields",
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     try {
       const response = await auth.register({ email, password, fullName });
       
-      // Store token
-      localStorage.setItem("access_token", response.data.access_token);
+      // Store user details and tokens
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+      localStorage.setItem("access_token", response.data.session.access_token);
+      localStorage.setItem("refresh_token", response.data.session.refresh_token);
       
       showToast({
         type: "success",
@@ -52,11 +64,19 @@ export default function SignUp() {
       
       router.push("/dashboard");
     } catch (error: any) {
-      showToast({
-        type: "error",
-        title: "Error",
-        message: error.response?.data?.message || "Failed to create account",
-      });
+      if (error.response?.status === 401) {
+        showToast({
+          type: "error",
+          title: "Error",
+          message: "Authentication failed",
+        });
+      } else {
+        showToast({
+          type: "error",
+          title: "Error",
+          message: error.response?.data?.message || "Failed to create account",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -86,7 +106,7 @@ export default function SignUp() {
               Create an account
             </h1>
             <p className="text-gray-600 mb-4 lg:mb-6 font-[family-name:var(--font-nunito)]">
-              Get started with your event management
+              Get started with your form building
             </p>
 
             {/* Commented out for future implementation
@@ -142,7 +162,7 @@ export default function SignUp() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="John Doe"
-                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
+                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 text-black focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
                 />
               </div>
               <div>
@@ -155,7 +175,7 @@ export default function SignUp() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
+                  className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 text-black focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
                 />
               </div>
               <div>
@@ -168,7 +188,7 @@ export default function SignUp() {
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
+                    className="w-full px-4 py-2 lg:py-2.5 rounded-lg border border-gray-200 text-black focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors text-sm font-[family-name:var(--font-nunito)]"
                   />
                   <button
                     type="button"

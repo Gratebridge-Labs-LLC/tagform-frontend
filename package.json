@@ -11,8 +11,10 @@
   "dependencies": {
     "@headlessui/react": "^2.2.1",
     "@heroicons/react": "^2.2.0",
+    "@types/js-cookie": "^3.0.6",
     "axios": "^1.8.4",
     "framer-motion": "^12.6.3",
+    "js-cookie": "^3.0.5",
     "next": "15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

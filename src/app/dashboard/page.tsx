@@ -23,6 +23,7 @@ import {
   EnvelopeIcon,
   BellIcon
 } from "@heroicons/react/24/outline";
+import UserProfileDropdown from "@/components/UserProfileDropdown";
 
 const navigation = [
   { name: "Forms", href: "/dashboard", current: true },
@@ -499,21 +500,24 @@ export default function Dashboard() {
         <div className="flex-1 flex flex-col">
           {/* Header with navigation */}
           <div className="bg-[#f7f7f8] rounded-t-2xl">
-            <nav className="flex space-x-8 px-8 py-2">
-              {navigation.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`px-1 py-4 text-sm font-[family-name:var(--font-nunito)] border-b-2 ${
-                    item.current
-                      ? "border-black text-black"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </nav>
+            <div className="flex items-center justify-between px-8 py-2">
+              <nav className="flex space-x-8">
+                {navigation.map((item) => (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`px-1 py-4 text-sm font-[family-name:var(--font-nunito)] border-b-2 ${
+                      item.current
+                        ? "border-black text-black"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    {item.name}
+                  </Link>
+                ))}
+              </nav>
+              <UserProfileDropdown />
+            </div>
           </div>
 
           {/* Workspace section */}

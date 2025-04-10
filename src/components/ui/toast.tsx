@@ -56,27 +56,29 @@ export function Toast({ id, type, title, message, duration = 5000, onClose }: To
       leaveFrom="opacity-100"
       leaveTo="opacity-0"
     >
-      <div className={`w-full bg-white shadow-lg pointer-events-auto border ${styles[type]} overflow-hidden`}>
-        <div className="p-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <Icon className={`h-5 w-5 ${iconStyles[type]}`} />
-            </div>
-            <div className="ml-3 w-0 flex-1">
-              <p className="text-sm font-medium font-[family-name:var(--font-nunito)]">{title}</p>
-              {message && <p className="mt-1 text-sm opacity-90 font-[family-name:var(--font-nunito)]">{message}</p>}
-            </div>
-            <div className="ml-4 flex-shrink-0 flex">
-              <button
-                className={`rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-${type === 'info' ? 'blue' : type === 'success' ? 'emerald' : type === 'warning' ? 'yellow' : 'red'}-500`}
-                onClick={() => {
-                  setShow(false);
-                  setTimeout(() => onClose(id), 300);
-                }}
-              >
-                <span className="sr-only">Close</span>
-                <XMarkIcon className="h-5 w-5" />
-              </button>
+      <div className="fixed top-4 right-4 w-full max-w-md z-50">
+        <div className={`w-full bg-white shadow-lg pointer-events-auto border ${styles[type]} overflow-hidden`}>
+          <div className="p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <Icon className={`h-5 w-5 ${iconStyles[type]}`} />
+              </div>
+              <div className="ml-3 w-0 flex-1">
+                <p className="text-sm font-medium font-[family-name:var(--font-nunito)]">{title}</p>
+                {message && <p className="mt-1 text-sm opacity-90 font-[family-name:var(--font-nunito)]">{message}</p>}
+              </div>
+              <div className="ml-4 flex-shrink-0 flex">
+                <button
+                  className={`rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-${type === 'info' ? 'blue' : type === 'success' ? 'emerald' : type === 'warning' ? 'yellow' : 'red'}-500`}
+                  onClick={() => {
+                    setShow(false);
+                    setTimeout(() => onClose(id), 300);
+                  }}
+                >
+                  <span className="sr-only">Close</span>
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
