@@ -26,6 +26,7 @@ import {
 import UserProfileDropdown from "@/components/UserProfileDropdown";
 import apiClient from "@/lib/api-client";
 import { useToast } from "@/contexts/toast-context";
+import { useRouter } from "next/navigation";
 
 const navigation = [
   { name: "Forms", href: "/dashboard", current: true },
@@ -305,97 +306,69 @@ const AnalyticsModal = ({
   );
 };
 
-interface CreateWorkspaceModalProps {
+interface CreateFormModalProps {
   onClose: () => void;
-  onSubmit: (name: string, type: 'private' | 'public') => void;
+  onSubmit: (name: string) => void;
   isLoading: boolean;
 }
 
-const CreateWorkspaceModal = ({ onClose, onSubmit, isLoading }: CreateWorkspaceModalProps) => {
+const CreateFormModal = ({ onClose, onSubmit, isLoading }: CreateFormModalProps) => {
   const [name, setName] = useState('');
-  const [type, setType] = useState<'private' | 'public'>('private');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(name, type);
+    onSubmit(name);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white w-[400px] rounded-xl">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">Create Workspace</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors">
+      <div className="bg-white w-[400px] rounded-2xl shadow-xl">
+        <div className="flex items-center justify-between p-6">
+          <h2 className="text-xl font-semibold text-gray-900 font-[family-name:var(--font-nunito)]">Create Form</h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-50 rounded-lg transition-colors"
+          >
             <XMarkIcon className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div>
-            <label htmlFor="workspace-name" className="block text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-2">
-              Workspace Name
+        <form onSubmit={handleSubmit} className="px-6 pb-6">
+          <div className="space-y-1.5">
+            <label htmlFor="form-name" className="block text-sm font-medium text-gray-700 font-[family-name:var(--font-nunito)]">
+              Form Name
             </label>
             <input
               type="text"
-              id="workspace-name"
+              id="form-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:border-gray-300 text-gray-900"
-              placeholder="Enter workspace name"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg font-[family-name:var(--font-nunito)] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors text-gray-900"
+              placeholder="Enter form name"
               required
+              autoFocus
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-3">
-              Workspace Type
-            </label>
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                <input
-                  type="radio"
-                  name="workspace-type"
-                  value="private"
-                  checked={type === 'private'}
-                  onChange={(e) => setType(e.target.value as 'private' | 'public')}
-                  className="text-black focus:ring-0 focus:ring-offset-0"
-                />
-                <div>
-                  <p className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">Private</p>
-                  <p className="text-sm text-gray-500 font-[family-name:var(--font-nunito)]">Only you can access this workspace</p>
-                </div>
-              </label>
-              <div className="relative">
-                <label className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-not-allowed bg-gray-50">
-                  <input
-                    type="radio"
-                    name="workspace-type"
-                    value="public"
-                    disabled
-                    className="text-gray-300 focus:ring-0 focus:ring-offset-0"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">Public</p>
-                      <span className="px-2 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-full font-[family-name:var(--font-nunito)]">Coming Soon</span>
-                    </div>
-                    <p className="text-sm text-gray-500 font-[family-name:var(--font-nunito)]">Anyone with the link can access</p>
-                  </div>
-                </label>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3">
+          <div className="mt-6 flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-700 font-[family-name:var(--font-nunito)] hover:bg-gray-50 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 font-[family-name:var(--font-nunito)] hover:bg-gray-50 rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm text-white font-[family-name:var(--font-nunito)] bg-black hover:bg-gray-900 rounded-lg transition-colors"
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium text-white font-[family-name:var(--font-nunito)] bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {isLoading ? 'Creating...' : 'Create Workspace'}
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Form'
+              )}
             </button>
           </div>
         </form>
@@ -441,8 +414,65 @@ interface FormResponse {
   };
 }
 
+interface DeleteConfirmationModalProps {
+  form: Form;
+  onClose: () => void;
+  onConfirm: () => void;
+  isDeleting: boolean;
+}
+
+const DeleteConfirmationModal = ({ form, onClose, onConfirm, isDeleting }: DeleteConfirmationModalProps) => {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white w-[400px] rounded-xl">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">Delete Form</h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6">
+          <p className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">
+            Are you sure you want to delete "<span className="font-medium text-gray-900">{form.name}</span>"? This action cannot be undone.
+          </p>
+        </div>
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            disabled={isDeleting}
+            className="px-4 py-2 text-sm text-gray-700 font-[family-name:var(--font-nunito)] hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="px-4 py-2 text-sm text-white font-[family-name:var(--font-nunito)] bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {isDeleting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <TrashIcon className="w-4 h-4" />
+                Delete Form
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const { showToast } = useToast();
+  const router = useRouter();
   const [isPrivateExpanded, setIsPrivateExpanded] = useState(true);
   const [isPublicExpanded, setIsPublicExpanded] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -455,19 +485,31 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingForms, setIsLoadingForms] = useState(false);
+  const [formToDelete, setFormToDelete] = useState<Form | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchWorkspaces = async () => {
     try {
       setIsLoading(true);
-      const response = await apiClient.get<WorkspaceResponse>(`/workspaces?search=${searchQuery}`);
+      const response = await apiClient.get<WorkspaceResponse>(`/workspaces?search=${debouncedSearchQuery}`);
       setWorkspaces(response.data.workspaces);
       
-      // Select the first workspace by default if none is selected
-      const activeWorkspace = localStorage.getItem('activeWorkspace');
+      // Only set active workspace and fetch forms if no workspace is currently selected
       if (!activeWorkspace && response.data.workspaces.length > 0) {
         const firstWorkspace = response.data.workspaces[0];
-        localStorage.setItem('activeWorkspace', JSON.stringify(firstWorkspace));
         setActiveWorkspace(firstWorkspace);
+        localStorage.setItem('activeWorkspace', JSON.stringify(firstWorkspace));
         await fetchForms(firstWorkspace.id);
       }
     } catch (error) {
@@ -477,19 +519,22 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch workspaces on mount
+  // Fetch workspaces when debounced search query changes
   useEffect(() => {
-    fetchWorkspaces();
-  }, [searchQuery]);
-
-  // Fetch forms when active workspace changes
-  useEffect(() => {
-    if (activeWorkspace) {
-      fetchForms(activeWorkspace.id);
-    } else {
-      setForms([]);
+    if (!workspaces.length) {
+      fetchWorkspaces();
     }
-  }, [activeWorkspace]);
+  }, [debouncedSearchQuery]);
+
+  // Initialize active workspace from localStorage on mount
+  useEffect(() => {
+    const storedWorkspace = localStorage.getItem('activeWorkspace');
+    if (storedWorkspace) {
+      const workspace = JSON.parse(storedWorkspace);
+      setActiveWorkspace(workspace);
+      fetchForms(workspace.id);
+    }
+  }, []);
 
   const fetchForms = async (workspaceId: string) => {
     try {
@@ -509,10 +554,13 @@ export default function Dashboard() {
     }
   };
 
-  const handleWorkspaceClick = async (workspace: Workspace) => {
+  const handleWorkspaceClick = (workspace: Workspace) => {
+    if (workspace.id === activeWorkspace?.id) return;
+    
     setActiveWorkspace(workspace);
     localStorage.setItem('activeWorkspace', JSON.stringify(workspace));
-    await fetchForms(workspace.id);
+    setForms([]); // Clear forms before fetching new ones
+    fetchForms(workspace.id);
   };
 
   const handleActionClick = (formId: string) => {
@@ -554,13 +602,18 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteForm = async (formId: string) => {
+  const handleDeleteClick = (form: Form) => {
+    setFormToDelete(form);
+    setShowActionsFor(null);
+  };
+
+  const handleDeleteForm = async () => {
+    if (!formToDelete || !activeWorkspace) return;
+    
     try {
-      if (!activeWorkspace) return;
-      
-      await apiClient.delete(`/workspaces/${activeWorkspace.id}/forms/${formId}`);
-      setForms(forms.filter(form => form.id !== formId));
-      setShowActionsFor(null);
+      setIsDeleting(true);
+      await apiClient.delete(`/workspaces/${activeWorkspace.id}/forms/${formToDelete.id}`);
+      setForms(forms.filter(form => form.id !== formToDelete.id));
       
       showToast({
         type: 'success',
@@ -576,8 +629,65 @@ export default function Dashboard() {
         message: error.response?.data?.error || 'Failed to delete form',
         duration: 3000,
       });
+    } finally {
+      setIsDeleting(false);
+      setFormToDelete(null);
     }
   };
+
+  const handleCreateForm = async (name: string) => {
+    if (!activeWorkspace) {
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Please select a workspace first',
+        duration: 3000,
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await apiClient.post(`/workspaces/${activeWorkspace.id}/forms`, {
+        name,
+        is_private: true // Always create private forms
+      });
+      
+      // Redirect to form editor
+      router.push(`/dashboard/forms/${response.data.id}`);
+      
+      showToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Form created successfully',
+        duration: 3000,
+      });
+    } catch (error: any) {
+      console.error('Failed to create form:', error);
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.error || 'Failed to create form',
+        duration: 3000,
+      });
+    } finally {
+      setIsLoading(false);
+      setShowCreateForm(false);
+    }
+  };
+
+  // Add a function to refresh forms only
+  const refreshForms = async () => {
+    if (!activeWorkspace) return;
+    await fetchForms(activeWorkspace.id);
+  };
+
+  // Refresh forms when component mounts or when returning to the page
+  useEffect(() => {
+    if (activeWorkspace) {
+      refreshForms();
+    }
+  }, []);
 
   return (
     <>
@@ -586,10 +696,13 @@ export default function Dashboard() {
         <div className="w-60 bg-[#f7f7f8] flex flex-col rounded-2xl">
           {/* Create new form button */}
           <div className="p-4">
-            <Link href="/dashboard/forms/new" className="w-full flex items-center gap-2 px-4 py-2 bg-[#262626] text-white rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-black">
+            <button 
+              onClick={() => setShowCreateForm(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#262626] text-white rounded-lg text-sm font-medium font-[family-name:var(--font-nunito)] hover:bg-black transition-colors"
+            >
               <PlusIcon className="w-4 h-4" />
-              Create a new form
-            </Link>
+              Create Form
+            </button>
           </div>
 
           {/* Search */}
@@ -750,8 +863,15 @@ export default function Dashboard() {
                     </div>
                     <h3 className="text-2xl font-jedira-italic text-gray-900 mb-2">Select a workspace</h3>
                     <p className="text-sm font-[family-name:var(--font-nunito)] text-gray-500 mb-6 max-w-sm mx-auto">
-                      Choose a workspace from the sidebar to view its forms or create a new workspace.
+                      Choose a workspace from the sidebar to view its forms or create a new form.
                     </p>
+                    <button 
+                      onClick={() => setShowCreateForm(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#262626] text-white rounded-lg text-sm font-medium font-[family-name:var(--font-nunito)] hover:bg-black transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" />
+                      Create Form
+                    </button>
                   </div>
                 </div>
               ) : isLoadingForms ? (
@@ -773,10 +893,13 @@ export default function Dashboard() {
                     <p className="text-sm font-[family-name:var(--font-nunito)] text-gray-500 mb-6 max-w-sm mx-auto">
                       Get started by creating your first form. You can create surveys, feedback forms, or any type of form you need.
                     </p>
-                    <Link href="/dashboard/forms/new" className="inline-flex items-center gap-2 px-4 py-2 bg-[#262626] text-white rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-black">
+                    <button 
+                      onClick={() => setShowCreateForm(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#262626] text-white rounded-lg text-sm font-medium font-[family-name:var(--font-nunito)] hover:bg-black transition-colors"
+                    >
                       <PlusIcon className="w-4 h-4" />
-                      Create your first form
-                    </Link>
+                      Create Form
+                    </button>
                   </div>
                 </div>
               ) : viewMode === 'list' ? (
@@ -828,7 +951,7 @@ export default function Dashboard() {
                               Duplicate
                             </button>
                             <button 
-                              onClick={() => handleDeleteForm(form.id)}
+                              onClick={() => handleDeleteClick(form)}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
                             >
                               <TrashIcon className="w-4 h-4" />
@@ -890,7 +1013,7 @@ export default function Dashboard() {
                                 Duplicate
                               </button>
                               <button 
-                                onClick={() => handleDeleteForm(form.id)}
+                                onClick={() => handleDeleteClick(form)}
                                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
                               >
                                 <TrashIcon className="w-4 h-4" />
@@ -917,12 +1040,22 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Create Workspace Modal */}
-      {showCreateWorkspace && (
-        <CreateWorkspaceModal
-          onClose={() => setShowCreateWorkspace(false)}
-          onSubmit={handleCreateWorkspace}
+      {/* Create Form Modal */}
+      {showCreateForm && (
+        <CreateFormModal
+          onClose={() => setShowCreateForm(false)}
+          onSubmit={handleCreateForm}
           isLoading={isLoading}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {formToDelete && (
+        <DeleteConfirmationModal
+          form={formToDelete}
+          onClose={() => setFormToDelete(null)}
+          onConfirm={handleDeleteForm}
+          isDeleting={isDeleting}
         />
       )}
     </>

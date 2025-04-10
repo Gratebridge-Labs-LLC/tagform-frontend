@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
@@ -43,6 +43,7 @@ import {
   ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 import { useToast } from "@/contexts/toast-context";
+import { debounce } from "lodash";
 
 const questionTypes = [
   {
@@ -168,7 +169,7 @@ interface Question {
   text: string;
   description?: string;
   isRequired: boolean;
-  maxChars?: number;
+  maxChars?: number | null;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -832,29 +833,17 @@ export default function FormEditor() {
   const params = useParams();
   const { showToast } = useToast();
   
-  // Get the active workspace from localStorage
-  const activeWorkspace = localStorage.getItem('activeWorkspace');
-  const workspace = activeWorkspace ? JSON.parse(activeWorkspace) : null;
+  const [isLoading, setIsLoading] = useState(true);
+  const [workspace, setWorkspace] = useState<{ id: string; name: string } | null>(null);
   
   const [form, setForm] = useState<Form>({
     id: params.formId as string,
-    workspaceId: workspace?.id || "", // Set workspace ID from localStorage
+    workspaceId: "",
     name: `Untitled Form ${Math.floor(Math.random() * 1000)}`,
     isPrivate: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    questions: [
-      {
-        id: "1",
-        formId: params.formId as string,
-        type: "short-text",
-        text: "Untitled question",
-        isRequired: false,
-        order: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    ],
+    questions: [],
     settings: {
       id: "",
       formId: params.formId as string,
@@ -871,6 +860,116 @@ export default function FormEditor() {
     },
     isDirty: false,
   });
+
+  // Load workspace from localStorage on mount
+  useEffect(() => {
+    const storedWorkspace = localStorage.getItem('activeWorkspace');
+    if (!storedWorkspace) {
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "No workspace selected. Please select a workspace first.",
+        duration: 3000
+      });
+      router.push('/dashboard');
+      return;
+    }
+    setWorkspace(JSON.parse(storedWorkspace));
+  }, []);
+
+  // Fetch form data on mount only once
+  useEffect(() => {
+    let isMounted = true;
+    
+    const fetchForm = async () => {
+      try {
+        if (!workspace?.id) {
+          return; // Wait for workspace to be loaded
+        }
+
+        setIsLoading(true);
+
+        try {
+          const response = await apiClient.get<Form>(`/workspaces/${workspace.id}/forms/${params.formId}`);
+          if (isMounted) {
+            setForm({
+              ...response.data,
+              isDirty: false,
+            });
+          }
+        } catch (error: any) {
+          console.error('Failed to fetch form:', error);
+          if (error.response?.status === 404 && isMounted) {
+            // Create new form with proper initial data
+            const initialForm: Form = {
+              id: params.formId as string,
+              workspaceId: workspace.id,
+              name: `Untitled Form ${Math.floor(Math.random() * 1000)}`,
+              isPrivate: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              questions: [
+                {
+                  id: "1",
+                  formId: params.formId as string,
+                  type: "short-text" as QuestionType,
+                  text: "Untitled question",
+                  isRequired: false,
+                  order: 1,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+              ],
+              settings: {
+                id: "",
+                formId: params.formId as string,
+                landingPageTitle: "Welcome to the Form",
+                landingPageDescription: "Please fill out this form to help us understand your needs better.",
+                landingPageButtonText: "Start",
+                showProgressBar: true,
+                endingPageTitle: "Thank You!",
+                endingPageDescription: "Your response has been recorded. We appreciate your time.",
+                endingPageButtonText: "Submit Another Response",
+                redirectUrl: "",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+              isDirty: false,
+            };
+            
+            // Create the form on the backend
+            const response = await apiClient.post<Form>(`/workspaces/${workspace.id}/forms`, {
+              name: initialForm.name,
+              description: "",
+              is_private: initialForm.isPrivate,
+            });
+            
+            if (isMounted) {
+              setForm({
+                ...initialForm,
+                ...response.data,
+                isDirty: false,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to get active workspace:', error);
+        router.push('/dashboard');
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchForm();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [params.formId, workspace?.id]);
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [showQuestionTypes, setShowQuestionTypes] = useState(false);
   const [currentQuestionId, setCurrentQuestionId] = useState("1");
@@ -881,42 +980,144 @@ export default function FormEditor() {
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateButton, setShowCreateButton] = useState(true);
 
-  // Fetch form data on mount
-  useEffect(() => {
-    const fetchForm = async () => {
-      try {
-        if (!workspace) {
-          showToast({
-            type: "error",
-            title: "Error",
-            message: "No workspace selected. Please select a workspace first.",
-            duration: 3000
-          });
-          router.push('/dashboard');
-          return;
-        }
+  const handleSave = async () => {
+    if (!form.isDirty || isSaving || !workspace?.id) return;
 
-        try {
-          const response = await apiClient.get<Form>(`/workspaces/${workspace.id}/forms/${params.formId}`);
-          setForm(prev => ({
-            ...response.data,
-            isDirty: false,
-          }));
-        } catch (error: any) {
-          console.error('Failed to fetch form:', error);
-          // If form doesn't exist, create a new one
-          if (error.response?.status === 404) {
-            await handleCreateForm(workspace.id);
+    try {
+      setIsSaving(true);
+
+      // Update form name if changed
+      await apiClient.put(`/workspaces/${workspace.id}/forms/${form.id}`, {
+        name: form.name,
+        description: form.description,
+        is_private: form.isPrivate,
+      });
+
+      // Handle questions
+      const questionPromises = form.questions.map(async (question) => {
+        if (question.id.startsWith('temp-')) {
+          // Create new question
+          const response = await apiClient.post<Question>(
+            `/workspaces/${workspace.id}/forms/${form.id}/questions`,
+            {
+              type: question.type,
+              text: question.text,
+              description: question.description,
+              is_required: question.isRequired,
+              max_chars: question.maxChars,
+              order: question.order,
+            }
+          );
+
+          // If the question has choices, create them
+          if (question.choices?.length) {
+            await Promise.all(
+              question.choices.map((choice) =>
+                apiClient.post(
+                  `/workspaces/${workspace.id}/forms/${form.id}/questions/${response.data.id}/choices`,
+                  {
+                    text: choice.text,
+                    order: choice.order,
+                  }
+                )
+              )
+            );
           }
-        }
-      } catch (error) {
-        console.error('Failed to get active workspace:', error);
-        router.push('/dashboard');
-      }
-    };
 
-    fetchForm();
-  }, [params.formId, workspace]);
+          // Update the question ID in the form state
+          return { ...response.data, choices: question.choices };
+        } else {
+          // Update existing question
+          await apiClient.put(
+            `/workspaces/${workspace.id}/forms/${form.id}/questions/${question.id}`,
+            {
+              text: question.text,
+              description: question.description,
+              is_required: question.isRequired,
+              max_chars: question.maxChars,
+              order: question.order,
+            }
+          );
+
+          // Update choices if they exist
+          if (question.choices?.length) {
+            await Promise.all(
+              question.choices.map((choice) =>
+                apiClient.put(
+                  `/workspaces/${workspace.id}/forms/${form.id}/questions/${question.id}/choices/${choice.id}`,
+                  {
+                    text: choice.text,
+                    order: choice.order,
+                  }
+                )
+              )
+            );
+          }
+
+          return question;
+        }
+      });
+
+      const updatedQuestions = await Promise.all(questionPromises);
+
+      // Update settings with default values for any missing fields
+      const settingsPayload = {
+        landing_page_title: form.settings.landingPageTitle || "Welcome to the Form",
+        landing_page_description: form.settings.landingPageDescription || "Please fill out this form to help us understand your needs better.",
+        landing_page_button_text: form.settings.landingPageButtonText || "Start",
+        show_progress_bar: form.settings.showProgressBar ?? true,
+        ending_page_title: form.settings.endingPageTitle || "Thank You!",
+        ending_page_description: form.settings.endingPageDescription || "Your response has been recorded. We appreciate your time.",
+        ending_page_button_text: form.settings.endingPageButtonText || "Submit Another Response",
+        redirect_url: form.settings.redirectUrl || "",
+      };
+
+      // Update settings
+      await apiClient.put(`/workspaces/${workspace.id}/forms/${form.id}/settings`, settingsPayload);
+
+      setForm(prev => ({
+        ...prev,
+        questions: updatedQuestions,
+        isDirty: false,
+        lastSaved: new Date().toISOString(),
+      }));
+
+      showToast({
+        type: "success",
+        title: "Success",
+        message: "Form saved successfully",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Failed to save form:', error);
+      showToast({
+        type: "error",
+        title: "Error",
+        message: "Failed to save form. Please try again.",
+        duration: 3000,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFormNameChange = (name: string) => {
+    setForm(prev => ({
+      ...prev,
+      name,
+      isDirty: true
+    }));
+  };
+
+  const handleQuestionChange = (questionId: string, updates: Partial<Question>) => {
+    setForm(prev => ({
+      ...prev,
+      questions: prev.questions.map(q => 
+        q.id === questionId ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q
+      ),
+      isDirty: true
+    }));
+  };
 
   const handleCreateForm = async (workspaceId: string) => {
     try {
@@ -995,107 +1196,6 @@ export default function FormEditor() {
     }
   };
 
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      
-      // Update form
-      await apiClient.put(`/workspaces/${form.workspaceId}/forms/${form.id}`, {
-        name: form.name,
-        description: form.description,
-        is_private: form.isPrivate,
-      });
-
-      // Update questions
-      for (const question of form.questions) {
-        if (question.id.startsWith('temp-')) {
-          // Create new question
-          const response = await apiClient.post<Question>(`/workspaces/${form.workspaceId}/forms/${form.id}/questions`, {
-            type: question.type,
-            text: question.text,
-            description: question.description,
-            is_required: question.isRequired,
-            max_chars: question.maxChars,
-            order: question.order,
-            choices: question.choices?.map(c => ({
-              text: c.text,
-              order: c.order
-            }))
-          });
-          
-          // Update choices if needed
-          if (question.choices?.length) {
-            for (const choice of question.choices) {
-              await apiClient.post(`/workspaces/${form.workspaceId}/forms/${form.id}/questions/${response.data.id}/choices`, {
-                text: choice.text,
-                order: choice.order,
-              });
-            }
-          }
-        } else {
-          // Update existing question
-          await apiClient.put(`/workspaces/${form.workspaceId}/forms/${form.id}/questions/${question.id}`, {
-            text: question.text,
-            description: question.description,
-            is_required: question.isRequired,
-            max_chars: question.maxChars,
-            order: question.order,
-            choices: question.choices?.map(c => ({
-              text: c.text,
-              order: c.order
-            }))
-          });
-        }
-      }
-
-      // Update settings
-      await apiClient.put(`/workspaces/${form.workspaceId}/forms/${form.id}/settings`, {
-        landing_page_title: form.settings.landingPageTitle,
-        landing_page_description: form.settings.landingPageDescription,
-        landing_page_button_text: form.settings.landingPageButtonText,
-        show_progress_bar: form.settings.showProgressBar,
-        ending_page_title: form.settings.endingPageTitle,
-        ending_page_description: form.settings.endingPageDescription,
-        ending_page_button_text: form.settings.endingPageButtonText,
-        redirect_url: form.settings.redirectUrl,
-      });
-
-      setForm(prev => ({
-        ...prev,
-        isDirty: false,
-        lastSaved: new Date().toISOString(),
-      }));
-    } catch (error) {
-      console.error('Failed to save form:', error);
-      showToast({
-        type: "error",
-        title: "Error",
-        message: "Failed to save form. Please try again.",
-        duration: 3000
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleFormNameChange = (name: string) => {
-    setForm(prev => ({
-      ...prev,
-      name,
-      isDirty: true
-    }));
-  };
-
-  const handleQuestionChange = (questionId: string, updates: Partial<Question>) => {
-    setForm(prev => ({
-      ...prev,
-      questions: prev.questions.map(q => 
-        q.id === questionId ? { ...q, ...updates, updatedAt: new Date().toISOString() } : q
-      ),
-      isDirty: true
-    }));
-  };
-
   const handleAddQuestion = (typeId: string) => {
     const newQuestion: Question = {
       id: `temp-${Date.now()}`,
@@ -1114,6 +1214,8 @@ export default function FormEditor() {
       isDirty: true
     }));
     setCurrentQuestionId(newQuestion.id);
+    setShowQuestionTypes(false);
+    handleSave(); // Save immediately when adding a new question
   };
 
   const handleSettingsChange = (settings: FormSettings) => {
@@ -1154,19 +1256,19 @@ export default function FormEditor() {
     }
   };
 
-  const handleQuestionTypeChange = (typeId: QuestionType) => {
+  const handleQuestionTypeChange = (type: QuestionType) => {
     const template = {
-      isRequired: false,
-      maxChars: typeId === 'short-text' ? 100 : undefined
+      maxChars: type === 'short-text' ? 100 : null,
+      choices: ['multiple-choice', 'dropdown', 'checkbox'].includes(type) ? [] : undefined
     };
 
     setForm(prev => ({
       ...prev,
       questions: prev.questions.map(q => 
-        q.id === currentQuestionId ? { ...q, type: typeId, ...template } : q
-      ),
-      isDirty: true
+        q.id === currentQuestionId ? { ...q, type, ...template } : q
+      )
     }));
+    setShowQuestionTypes(false);
   };
 
   const handleQuestionTextChange = (text: string) => {
@@ -1313,13 +1415,16 @@ export default function FormEditor() {
   };
 
   const renderQuestionPreview = (question: Question) => {
+    const baseInputClass = "w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200 font-[family-name:var(--font-nunito)] text-sm placeholder-gray-400";
+    const baseChoiceClass = "flex items-center space-x-3 py-2 px-3 rounded-lg hover:bg-gray-50 cursor-not-allowed";
+    
     switch (question.type) {
       case 'short-text':
         return (
           <input
             type="text"
             placeholder="Short answer text"
-            className="w-full px-3 py-2 border rounded-md"
+            className={baseInputClass}
             disabled
           />
         );
@@ -1327,35 +1432,100 @@ export default function FormEditor() {
         return (
           <textarea
             placeholder="Long answer text"
-            className="w-full px-3 py-2 border rounded-md"
+            rows={3}
+            className={`${baseInputClass} resize-none`}
+            disabled
+          />
+        );
+      case 'email':
+        return (
+          <input
+            type="email"
+            placeholder="email@example.com"
+            className={baseInputClass}
+            disabled
+          />
+        );
+      case 'phone':
+        return (
+          <input
+            type="tel"
+            placeholder="+1 (555) 000-0000"
+            className={baseInputClass}
+            disabled
+          />
+        );
+      case 'website':
+        return (
+          <input
+            type="url"
+            placeholder="https://example.com"
+            className={baseInputClass}
+            disabled
+          />
+        );
+      case 'date':
+        return (
+          <input
+            type="date"
+            className={baseInputClass}
             disabled
           />
         );
       case 'multiple-choice':
         return (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {question.choices?.map((choice) => (
-              <div key={choice.id} className="flex items-center">
-                <input type="radio" disabled className="mr-2" />
-                <span>{choice.text}</span>
+              <div key={choice.id} className={baseChoiceClass}>
+                <input 
+                  type="radio" 
+                  disabled 
+                  className="h-4 w-4 text-blue-600 border-gray-300 cursor-not-allowed" 
+                />
+                <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">{choice.text}</span>
               </div>
             ))}
           </div>
         );
+      case 'yes-no':
+        return (
+          <div className="space-y-1">
+            <div className={baseChoiceClass}>
+              <input 
+                type="radio" 
+                disabled 
+                className="h-4 w-4 text-blue-600 border-gray-300 cursor-not-allowed" 
+              />
+              <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">Yes</span>
+            </div>
+            <div className={baseChoiceClass}>
+              <input 
+                type="radio" 
+                disabled 
+                className="h-4 w-4 text-blue-600 border-gray-300 cursor-not-allowed" 
+              />
+              <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">No</span>
+            </div>
+          </div>
+        );
       case 'checkbox':
         return (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {question.choices?.map((choice) => (
-              <div key={choice.id} className="flex items-center">
-                <input type="checkbox" disabled className="mr-2" />
-                <span>{choice.text}</span>
+              <div key={choice.id} className={baseChoiceClass}>
+                <input 
+                  type="checkbox" 
+                  disabled 
+                  className="h-4 w-4 text-blue-600 rounded border-gray-300 cursor-not-allowed" 
+                />
+                <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">{choice.text}</span>
               </div>
             ))}
           </div>
         );
       case 'dropdown':
         return (
-          <select className="w-full px-3 py-2 border rounded-md" disabled>
+          <select className={`${baseInputClass} cursor-not-allowed`} disabled>
             <option value="">Select an option</option>
             {question.choices?.map((choice) => (
               <option key={choice.id} value={choice.id}>
@@ -1363,6 +1533,45 @@ export default function FormEditor() {
               </option>
             ))}
           </select>
+        );
+      case 'address':
+        return (
+          <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="Street address"
+              className={baseInputClass}
+              disabled
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="City"
+                className={baseInputClass}
+                disabled
+              />
+              <input
+                type="text"
+                placeholder="State / Province"
+                className={baseInputClass}
+                disabled
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="ZIP / Postal code"
+                className={baseInputClass}
+                disabled
+              />
+              <input
+                type="text"
+                placeholder="Country"
+                className={baseInputClass}
+                disabled
+              />
+            </div>
+          </div>
         );
       default:
         return null;
@@ -1388,517 +1597,531 @@ export default function FormEditor() {
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
             className="fixed inset-4 bg-white rounded-2xl shadow-2xl overflow-hidden"
           >
-            {/* Top Navigation */}
-            <header className="h-14 border-b border-gray-200 flex items-center justify-between px-4">
-              {/* Left - Workspace & Form Name */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleClose}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </button>
-                <div className="flex items-center gap-1 text-sm text-gray-900">
-                  <span className="font-jedira">My workspace</span>
-                  <span className="text-gray-400">/</span>
-                  {isEditingName ? (
-                    <input
-                      type="text"
-                      value={form.name}
-                      onChange={(e) => handleFormNameChange(e.target.value)}
-                      onBlur={() => setIsEditingName(false)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          setIsEditingName(false);
-                        }
-                      }}
-                      autoFocus
-                      className="font-medium font-jedira bg-transparent border-none outline-none focus:ring-0 w-40"
-                    />
-                  ) : (
-                    <span
-                      className="font-medium font-jedira cursor-pointer hover:text-gray-600"
-                      onClick={() => setIsEditingName(true)}
+            {isLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-12 h-12 border-4 border-gray-200 border-t-black rounded-full animate-spin mx-auto mb-4" />
+                  <p className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">Loading form...</p>
+                </div>
+              </div>
+            ) : form ? (
+              <>
+                {/* Top Navigation */}
+                <header className="h-14 border-b border-gray-200 flex items-center justify-between px-4">
+                  {/* Left - Workspace & Form Name */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleClose}
+                      className="text-gray-400 hover:text-gray-600"
                     >
-                      {form.name}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Middle - Tools */}
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setShowQuestionTypes(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-[family-name:var(--font-nunito)] text-gray-700 hover:bg-gray-50 rounded-md"
-                >
-                  <PlusIcon className="w-4 h-4" />
-                  Add content
-                </button>
-                <div className="flex items-center gap-2 border-l border-r px-4">
-                  <button
-                    onClick={() => setPreviewMode("desktop")}
-                    className={`p-1.5 rounded transition-colors ${
-                      previewMode === "desktop"
-                        ? "text-blue-600 bg-blue-50"
-                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    <ComputerDesktopIcon className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => setPreviewMode("mobile")}
-                    className={`p-1.5 rounded transition-colors ${
-                      previewMode === "mobile"
-                        ? "text-blue-600 bg-blue-50"
-                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    <DevicePhoneMobileIcon className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => setShowPageSettings(true)}
-                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
-                  >
-                    <Cog6ToothIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Right - Save & Update Buttons */}
-              <div className="flex items-center gap-2">
-                {form.isDirty && (
-                  <button 
-                    onClick={handleSave}
-                    className="flex items-center px-4 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-gray-200 transition-colors"
-                  >
-                    {isSaving ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-gray-300 border-t-black rounded-full animate-spin mr-2" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save'
-                    )}
-                  </button>
-                )}
-                {showCreateButton && (
-                  <button 
-                    onClick={handleCreate}
-                    className="flex items-center px-4 py-1.5 bg-emerald-600 text-white rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-emerald-700 transition-colors"
-                  >
-                    {isCreating ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white rounded-full animate-spin mr-2" />
-                        Creating...
-                      </>
-                    ) : (
-                      'Create'
-                    )}
-                  </button>
-                )}
-                <button className="flex items-center px-4 py-1.5 bg-emerald-600 text-white rounded-md text-sm font-[family-name:var(--font-nunito)] hover:bg-emerald-700 transition-colors">
-                  Update
-                </button>
-              </div>
-            </header>
-
-            <div className="flex h-[calc(100%-3.5rem)]">
-              {/* Left Sidebar - Questions List */}
-              <div className="w-64 border-r border-gray-200 bg-gray-50 overflow-y-auto">
-                <div className="p-4 space-y-2">
-                  <button
-                    onClick={() => setShowQuestionTypes(true)}
-                    className="w-full flex items-center gap-2 px-3 py-2 bg-white rounded-lg text-sm font-[family-name:var(--font-nunito)] text-gray-600 hover:bg-gray-50 border border-gray-200"
-                  >
-                    <PlusIcon className="w-4 h-4" />
-                    Add Question
-                  </button>
-                  <Reorder.Group
-                    axis="y"
-                    values={form.questions}
-                    onReorder={handleReorder}
-                    className="space-y-2"
-                  >
-                    {form.questions.map((question, index) => {
-                      const typeInfo = getQuestionTypeInfo(question.type);
-                      return (
-                        <Reorder.Item
-                          key={question.id}
-                          value={question}
-                          className={`w-full flex items-center gap-2 p-3 rounded-lg text-left cursor-grab active:cursor-grabbing ${
-                            currentQuestionId === question.id
-                              ? "bg-white shadow-sm"
-                              : "bg-transparent hover:bg-white/50"
-                          }`}
-                          onClick={() => setCurrentQuestionId(question.id)}
-                          dragListener={true}
-                          dragControls={undefined}
+                      <XMarkIcon className="w-5 h-5" />
+                    </button>
+                    <div className="flex items-center gap-1 text-sm text-gray-900">
+                      <span className="font-jedira">My workspace</span>
+                      <span className="text-gray-400">/</span>
+                      {isEditingName ? (
+                        <input
+                          type="text"
+                          value={form.name}
+                          onChange={(e) => handleFormNameChange(e.target.value)}
+                          onBlur={() => {
+                            setIsEditingName(false);
+                            handleSave();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              setIsEditingName(false);
+                              handleSave();
+                            }
+                          }}
+                          autoFocus
+                          className="font-medium font-jedira bg-transparent border-none outline-none focus:ring-0 w-40"
+                        />
+                      ) : (
+                        <span
+                          className="font-medium font-jedira cursor-pointer hover:text-gray-600"
+                          onClick={() => setIsEditingName(true)}
                         >
-                          <div className="flex items-center gap-2 w-full">
-                            <span
-                              className={`w-6 h-6 flex items-center justify-center ${typeInfo.bgColor} text-gray-700 rounded text-sm font-[family-name:var(--font-nunito)]`}
-                            >
-                              {index + 1}
-                            </span>
-                            <span className="text-sm text-gray-900 font-[family-name:var(--font-nunito)] truncate flex-1">
-                              {question.text || `Untitled question`}
-                            </span>
-                            <motion.div
-                              className="w-4 h-4 flex-shrink-0 opacity-50 group-hover:opacity-100"
-                              initial={false}
-                            >
-                              <svg viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
-                              </svg>
-                            </motion.div>
-                          </div>
-                        </Reorder.Item>
-                      );
-                    })}
-                  </Reorder.Group>
-                </div>
-              </div>
-
-              {/* Main Content - Update with preview modes */}
-              <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 overflow-y-auto">
-                {currentQuestion && (
-                  <div
-                    className={`w-full transition-all duration-300 ${
-                      previewMode === "mobile" ? "max-w-sm" : "max-w-2xl"
-                    } px-4 py-6`}
-                  >
-                    <div
-                      className={`relative bg-white rounded-xl shadow-sm overflow-hidden ${
-                        previewMode === "mobile" ? "mx-auto" : ""
-                      }`}
-                    >
-                      <div className="p-6">
-                        <div className="flex items-start gap-4">
-                          <span className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-lg font-[family-name:var(--font-nunito)]">
-                            {form.questions.findIndex(
-                              (q) => q.id === currentQuestion.id
-                            ) + 1}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <textarea
-                                value={currentQuestion.text}
-                                onChange={(e) =>
-                                  handleQuestionTextChange(e.target.value)
-                                }
-                                className={`w-full font-medium font-[family-name:var(--font-nunito)] bg-transparent border-none outline-none focus:ring-0 text-gray-900 placeholder-gray-400 resize-none overflow-hidden leading-tight ${
-                                  previewMode === "mobile"
-                                    ? "text-2xl"
-                                    : "text-3xl"
-                                }`}
-                                placeholder={getQuestionPlaceholder(
-                                  currentQuestion.type
-                                )}
-                                rows={1}
-                                onInput={(e) => {
-                                  const target =
-                                    e.target as HTMLTextAreaElement;
-                                  target.style.height = "auto";
-                                  target.style.height =
-                                    target.scrollHeight + "px";
-                                }}
-                                style={{ minHeight: "1.5em" }}
-                              />
-                              {currentQuestion.isRequired && (
-                                <span
-                                  className={`font-medium text-red-500 flex-shrink-0 ${
-                                    previewMode === "mobile"
-                                      ? "text-2xl"
-                                      : "text-3xl"
-                                  }`}
-                                >
-                                  *
-                                </span>
-                              )}
-                            </div>
-                            {currentQuestion.description && (
-                              <div className="mt-2 text-gray-500 text-sm font-[family-name:var(--font-nunito)]">
-                                {currentQuestion.description}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="mt-6">
-                          {renderQuestionPreview(currentQuestion)}
-                        </div>
-                      </div>
+                          {form.name}
+                        </span>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
 
-              {/* Question Types Modal */}
-              <AnimatePresence>
-                {showQuestionTypes && (
-                  <>
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="fixed inset-0 bg-black/50 z-[60]"
-                      onClick={() => setShowQuestionTypes(false)}
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{
-                        type: "spring",
-                        damping: 20,
-                        stiffness: 300,
-                      }}
-                      className="fixed left-1/2 top-24 -translate-x-1/2 w-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-xl shadow-2xl z-[70] overflow-hidden"
-                      onClick={(e) => e.stopPropagation()}
+                  {/* Middle - Tools */}
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setShowQuestionTypes(true)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm font-[family-name:var(--font-nunito)] text-gray-700 hover:bg-gray-50 rounded-md"
                     >
-                      <div className="p-4 border-b border-gray-200 bg-white sticky top-0">
-                        <div className="flex items-center justify-between">
-                          <h2 className="text-lg font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
-                            Add Question
-                          </h2>
-                          <button
-                            onClick={() => setShowQuestionTypes(false)}
-                            className="text-gray-400 hover:text-gray-600"
-                          >
-                            <XMarkIcon className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="p-4 overflow-y-auto max-h-[calc(100vh-12rem)]">
-                        <div className="space-y-6">
-                          {questionTypes.map((category) => (
-                            <div key={category.category}>
-                              <h3 className="text-sm font-medium text-gray-900 mb-3 font-[family-name:var(--font-nunito)]">
-                                {category.category}
-                              </h3>
-                              <div className="grid grid-cols-2 gap-2">
-                                {category.items.map((item) => (
-                                  <button
-                                    key={item.id}
-                                    onClick={() =>
-                                      handleAddQuestion(item.id)
-                                    }
-                                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                                  >
-                                    <div
-                                      className={`p-2 rounded-lg ${item.bgColor}`}
-                                    >
-                                      {React.createElement(item.icon, {
-                                        className: "w-5 h-5 text-gray-700",
-                                      })}
-                                    </div>
-                                    <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">
-                                      {item.name}
-                                    </span>
-                                  </button>
-                                ))}
+                      <PlusIcon className="w-4 h-4" />
+                      Add content
+                    </button>
+                    <div className="flex items-center gap-2 border-l border-r px-4">
+                      <button
+                        onClick={() => setPreviewMode("desktop")}
+                        className={`p-1.5 rounded transition-colors ${
+                          previewMode === "desktop"
+                            ? "text-blue-600 bg-blue-50"
+                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <ComputerDesktopIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setPreviewMode("mobile")}
+                        className={`p-1.5 rounded transition-colors ${
+                          previewMode === "mobile"
+                            ? "text-blue-600 bg-blue-50"
+                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <DevicePhoneMobileIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setShowPageSettings(true)}
+                        className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
+                      >
+                        <Cog6ToothIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right - Save Button */}
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={handleSave}
+                      disabled={!form.isDirty || isSaving}
+                      className={`flex items-center px-4 py-1.5 rounded-md text-sm font-[family-name:var(--font-nunito)] transition-colors ${
+                        form.isDirty 
+                          ? "bg-black text-white hover:bg-gray-900" 
+                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      }`}
+                    >
+                      {isSaving ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                          Saving...
+                        </>
+                      ) : form.isDirty ? (
+                        'Save changes'
+                      ) : (
+                        'Saved'
+                      )}
+                    </button>
+                  </div>
+                </header>
+
+                <div className="flex h-[calc(100%-3.5rem)]">
+                  {/* Left Sidebar - Questions List */}
+                  <div className="w-64 border-r border-gray-200 bg-gray-50 overflow-y-auto">
+                    <div className="p-4 space-y-2">
+                      <button
+                        onClick={() => setShowQuestionTypes(true)}
+                        className="w-full flex items-center gap-2 px-3 py-2 bg-white rounded-lg text-sm font-[family-name:var(--font-nunito)] text-gray-600 hover:bg-gray-50 border border-gray-200"
+                      >
+                        <PlusIcon className="w-4 h-4" />
+                        Add Question
+                      </button>
+                      <Reorder.Group
+                        axis="y"
+                        values={form.questions}
+                        onReorder={handleReorder}
+                        className="space-y-2"
+                      >
+                        {form.questions.map((question, index) => {
+                          const typeInfo = getQuestionTypeInfo(question.type);
+                          return (
+                            <Reorder.Item
+                              key={question.id}
+                              value={question}
+                              className={`w-full flex items-center gap-2 p-3 rounded-lg text-left cursor-grab active:cursor-grabbing ${
+                                currentQuestionId === question.id
+                                  ? "bg-white shadow-sm"
+                                  : "bg-transparent hover:bg-white/50"
+                              }`}
+                              onClick={() => setCurrentQuestionId(question.id)}
+                              dragListener={true}
+                              dragControls={undefined}
+                            >
+                              <div className="flex items-center gap-2 w-full">
+                                <span
+                                  className={`w-6 h-6 flex items-center justify-center ${typeInfo.bgColor} text-gray-700 rounded text-sm font-[family-name:var(--font-nunito)]`}
+                                >
+                                  {index + 1}
+                                </span>
+                                <span className="text-sm text-gray-900 font-[family-name:var(--font-nunito)] truncate flex-1">
+                                  {question.text || `Untitled question`}
+                                </span>
+                                <motion.div
+                                  className="w-4 h-4 flex-shrink-0 opacity-50 group-hover:opacity-100"
+                                  initial={false}
+                                >
+                                  <svg viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+                                  </svg>
+                                </motion.div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+                            </Reorder.Item>
+                          );
+                        })}
+                      </Reorder.Group>
+                    </div>
+                  </div>
 
-              {/* Settings Modal */}
-              <AnimatePresence>
-                {showSettings && (
-                  <>
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="fixed inset-0 bg-black/50 z-[60]"
-                      onClick={() => setShowSettings(false)}
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{
-                        type: "spring",
-                        damping: 20,
-                        stiffness: 300,
-                      }}
-                      className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] bg-white rounded-xl shadow-2xl z-[70] overflow-hidden"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="p-6 text-center">
-                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Cog6ToothIcon className="w-6 h-6 text-gray-600" />
-                        </div>
-                        <h2 className="text-lg font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-2">
-                          Advanced Theme Settings
-                        </h2>
-                        <p className="text-gray-500 text-sm font-[family-name:var(--font-nunito)]">
-                          Coming soon! We're working on advanced theme
-                          customization options.
-                        </p>
-                        <button
-                          onClick={() => setShowSettings(false)}
-                          className="mt-6 px-4 py-2 text-sm font-[family-name:var(--font-nunito)] text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
-                        >
-                          Close
-                        </button>
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-
-              {/* Right Sidebar - Question Settings */}
-              <div className="w-72 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
-                <div className="flex-1 p-4">
-                  <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-900 mb-4 font-[family-name:var(--font-nunito)]">
-                      Question Type
-                    </h3>
+                  {/* Main Content - Update with preview modes */}
+                  <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 overflow-y-auto">
                     {currentQuestion && (
-                      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-md">
+                      <div
+                        className={`w-full transition-all duration-300 ${
+                          previewMode === "mobile" ? "max-w-sm" : "max-w-2xl"
+                        } px-4 py-6`}
+                      >
                         <div
-                          className={`p-1.5 rounded-md ${
-                            getQuestionTypeInfo(currentQuestion.type).bgColor
+                          className={`relative bg-white rounded-xl shadow-sm overflow-hidden ${
+                            previewMode === "mobile" ? "mx-auto" : ""
                           }`}
                         >
-                          {React.createElement(
-                            getQuestionTypeInfo(currentQuestion.type).icon,
-                            {
-                              className: "w-4 h-4 text-gray-700",
-                            }
-                          )}
+                          <div className="p-6">
+                            <div className="flex items-start gap-4">
+                              <span className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-lg font-[family-name:var(--font-nunito)]">
+                                {form.questions.findIndex(
+                                  (q) => q.id === currentQuestion.id
+                                ) + 1}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <textarea
+                                    value={currentQuestion.text}
+                                    onChange={(e) =>
+                                      handleQuestionTextChange(e.target.value)
+                                    }
+                                    className={`w-full font-medium font-[family-name:var(--font-nunito)] bg-transparent border-none outline-none focus:ring-0 text-gray-900 placeholder-gray-400 resize-none overflow-hidden leading-tight ${
+                                      previewMode === "mobile"
+                                        ? "text-2xl"
+                                        : "text-3xl"
+                                    }`}
+                                    placeholder={getQuestionPlaceholder(
+                                      currentQuestion.type
+                                    )}
+                                    rows={1}
+                                    onInput={(e) => {
+                                      const target =
+                                        e.target as HTMLTextAreaElement;
+                                      target.style.height = "auto";
+                                      target.style.height =
+                                        target.scrollHeight + "px";
+                                    }}
+                                    style={{ minHeight: "1.5em" }}
+                                  />
+                                  {currentQuestion.isRequired && (
+                                    <span
+                                      className={`font-medium text-red-500 flex-shrink-0 ${
+                                        previewMode === "mobile"
+                                          ? "text-2xl"
+                                          : "text-3xl"
+                                      }`}
+                                    >
+                                      *
+                                    </span>
+                                  )}
+                                </div>
+                                {currentQuestion.description && (
+                                  <div className="mt-2 text-gray-500 text-sm font-[family-name:var(--font-nunito)]">
+                                    {currentQuestion.description}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="mt-6">
+                              {renderQuestionPreview(currentQuestion)}
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-700">
-                          {getQuestionTypeInfo(currentQuestion.type).name}
-                        </span>
                       </div>
                     )}
                   </div>
 
-                  <div className="border-t border-gray-200 pt-4">
-                    <h3 className="text-sm font-medium text-gray-900 mb-4 font-[family-name:var(--font-nunito)]">
-                      Settings
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">
-                          Required
-                        </span>
-                        <button
-                          onClick={() =>
-                            handleRequiredChange(!currentQuestion?.isRequired)
-                          }
-                          className={`w-10 h-6 rounded-full transition-colors ${
-                            currentQuestion?.isRequired
-                              ? "bg-gray-900"
-                              : "bg-gray-200"
-                          }`}
+                  {/* Question Types Modal */}
+                  <AnimatePresence>
+                    {showQuestionTypes && (
+                      <>
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="fixed inset-0 bg-black/50 z-[60]"
+                          onClick={() => setShowQuestionTypes(false)}
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{
+                            type: "spring",
+                            damping: 20,
+                            stiffness: 300,
+                          }}
+                          className="fixed left-1/2 top-24 -translate-x-1/2 w-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-xl shadow-2xl z-[70] overflow-hidden"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <div
-                            className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                              currentQuestion?.isRequired
-                                ? "translate-x-5"
-                                : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                      {(currentQuestion?.type === "short-text" ||
-                        currentQuestion?.type === "long-text") && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">
-                            Max characters
-                          </span>
-                          <input
-                            type="number"
-                            value={currentQuestion?.maxChars || ""}
-                            onChange={(e) =>
-                              handleMaxCharsChange(
-                                e.target.value ? Number(e.target.value) : undefined
-                              )
-                            }
-                            className="w-20 px-2 py-1 text-sm border border-gray-200 rounded font-[family-name:var(--font-nunito)]"
-                            placeholder="None"
-                          />
-                        </div>
-                      )}
-                      {(currentQuestion?.type === "multiple-choice" ||
-                        currentQuestion?.type === "dropdown" ||
-                        currentQuestion?.type === "checkbox") &&
-                        currentQuestion?.choices && (
-                          <div className="space-y-3">
-                            <h4 className="text-sm font-medium text-gray-700 font-[family-name:var(--font-nunito)]">
-                              Options
-                            </h4>
-                            <div className="space-y-2">
-                              {currentQuestion.choices.map((choice, index) => (
-                                <div
-                                  key={choice.id}
-                                  className="flex items-center gap-2"
-                                >
-                                  <div className="w-6 h-6 flex items-center justify-center flex-shrink-0 text-gray-400">
-                                    {String.fromCharCode(65 + index)}
-                                  </div>
-                                  <input
-                                    type="text"
-                                    value={choice.text}
-                                    onChange={(e) =>
-                                      handleChoiceTextChange(
-                                        currentQuestion.id,
-                                        choice.id,
-                                        e.target.value
-                                      )
-                                    }
-                                    className="flex-1 px-2 py-1.5 text-sm text-gray-900 border border-gray-200 rounded font-[family-name:var(--font-nunito)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                    placeholder={`Option ${index + 1}`}
-                                  />
-                                  {currentQuestion.choices &&
-                                    currentQuestion.choices.length > 2 && (
-                                      <button
-                                        onClick={() =>
-                                          handleDeleteChoice(choice.id)
-                                        }
-                                        className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
-                                      >
-                                        <XMarkIcon className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                </div>
-                              ))}
+                          <div className="p-4 border-b border-gray-200 bg-white sticky top-0">
+                            <div className="flex items-center justify-between">
+                              <h2 className="text-lg font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
+                                Add Question
+                              </h2>
                               <button
-                                onClick={handleAddChoice}
-                                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded border border-gray-200 transition-colors"
+                                onClick={() => setShowQuestionTypes(false)}
+                                className="text-gray-400 hover:text-gray-600"
                               >
-                                <PlusIcon className="w-4 h-4" />
-                                Add option
+                                <XMarkIcon className="w-5 h-5" />
                               </button>
                             </div>
                           </div>
+                          <div className="p-4 overflow-y-auto max-h-[calc(100vh-12rem)]">
+                            <div className="space-y-6">
+                              {questionTypes.map((category) => (
+                                <div key={category.category}>
+                                  <h3 className="text-sm font-medium text-gray-900 mb-3 font-[family-name:var(--font-nunito)]">
+                                    {category.category}
+                                  </h3>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {category.items.map((item) => (
+                                      <button
+                                        key={item.id}
+                                        onClick={() =>
+                                          handleAddQuestion(item.id)
+                                        }
+                                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                                      >
+                                        <div
+                                          className={`p-2 rounded-lg ${item.bgColor}`}
+                                        >
+                                          {React.createElement(item.icon, {
+                                            className: "w-5 h-5 text-gray-700",
+                                          })}
+                                        </div>
+                                        <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-900">
+                                          {item.name}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Settings Modal */}
+                  <AnimatePresence>
+                    {showSettings && (
+                      <>
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="fixed inset-0 bg-black/50 z-[60]"
+                          onClick={() => setShowSettings(false)}
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{
+                            type: "spring",
+                            damping: 20,
+                            stiffness: 300,
+                          }}
+                          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] bg-white rounded-xl shadow-2xl z-[70] overflow-hidden"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="p-6 text-center">
+                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <Cog6ToothIcon className="w-6 h-6 text-gray-600" />
+                            </div>
+                            <h2 className="text-lg font-medium text-gray-900 font-[family-name:var(--font-nunito)] mb-2">
+                              Advanced Theme Settings
+                            </h2>
+                            <p className="text-gray-500 text-sm font-[family-name:var(--font-nunito)]">
+                              Coming soon! We're working on advanced theme
+                              customization options.
+                            </p>
+                            <button
+                              onClick={() => setShowSettings(false)}
+                              className="mt-6 px-4 py-2 text-sm font-[family-name:var(--font-nunito)] text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Right Sidebar - Question Settings */}
+                  <div className="w-72 border-l border-gray-200 bg-white overflow-y-auto flex flex-col">
+                    <div className="flex-1 p-4">
+                      <div className="mb-6">
+                        <h3 className="text-sm font-medium text-gray-900 mb-4 font-[family-name:var(--font-nunito)]">
+                          Question Type
+                        </h3>
+                        {currentQuestion && (
+                          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-md">
+                            <div
+                              className={`p-1.5 rounded-md ${
+                                getQuestionTypeInfo(currentQuestion.type).bgColor
+                              }`}
+                            >
+                              {React.createElement(
+                                getQuestionTypeInfo(currentQuestion.type).icon,
+                                {
+                                  className: "w-4 h-4 text-gray-700",
+                                }
+                              )}
+                            </div>
+                            <span className="text-sm font-[family-name:var(--font-nunito)] text-gray-700">
+                              {getQuestionTypeInfo(currentQuestion.type).name}
+                            </span>
+                          </div>
                         )}
+                      </div>
+
+                      <div className="border-t border-gray-200 pt-4">
+                        <h3 className="text-sm font-medium text-gray-900 mb-4 font-[family-name:var(--font-nunito)]">
+                          Settings
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">
+                              Required
+                            </span>
+                            <button
+                              onClick={() =>
+                                handleRequiredChange(!currentQuestion?.isRequired)
+                              }
+                              className={`w-10 h-6 rounded-full transition-colors ${
+                                currentQuestion?.isRequired
+                                  ? "bg-gray-900"
+                                  : "bg-gray-200"
+                              }`}
+                            >
+                              <div
+                                className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                                  currentQuestion?.isRequired
+                                    ? "translate-x-5"
+                                    : "translate-x-1"
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          {(currentQuestion?.type === "short-text" ||
+                            currentQuestion?.type === "long-text") && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600 font-[family-name:var(--font-nunito)]">
+                                Max characters
+                              </span>
+                              <input
+                                type="number"
+                                value={currentQuestion?.maxChars || ""}
+                                onChange={(e) =>
+                                  handleMaxCharsChange(
+                                    e.target.value ? Number(e.target.value) : undefined
+                                  )
+                                }
+                                className="w-20 px-2 py-1 text-sm border border-gray-200 rounded font-[family-name:var(--font-nunito)]"
+                                placeholder="None"
+                              />
+                            </div>
+                          )}
+                          {(currentQuestion?.type === "multiple-choice" ||
+                            currentQuestion?.type === "dropdown" ||
+                            currentQuestion?.type === "checkbox") &&
+                            currentQuestion?.choices && (
+                              <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-gray-700 font-[family-name:var(--font-nunito)]">
+                                  Options
+                                </h4>
+                                <div className="space-y-2">
+                                  {currentQuestion.choices.map((choice, index) => (
+                                    <div
+                                      key={choice.id}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <div className="w-6 h-6 flex items-center justify-center flex-shrink-0 text-gray-400">
+                                        {String.fromCharCode(65 + index)}
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={choice.text}
+                                        onChange={(e) =>
+                                          handleChoiceTextChange(
+                                            currentQuestion.id,
+                                            choice.id,
+                                            e.target.value
+                                          )
+                                        }
+                                        className="flex-1 px-2 py-1.5 text-sm text-gray-900 border border-gray-200 rounded font-[family-name:var(--font-nunito)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                        placeholder={`Option ${index + 1}`}
+                                      />
+                                      {currentQuestion.choices &&
+                                        currentQuestion.choices.length > 2 && (
+                                          <button
+                                            onClick={() =>
+                                              handleDeleteChoice(choice.id)
+                                            }
+                                            className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+                                          >
+                                            <XMarkIcon className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                    </div>
+                                  ))}
+                                  <button
+                                    onClick={handleAddChoice}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded border border-gray-200 transition-colors"
+                                  >
+                                    <PlusIcon className="w-4 h-4" />
+                                    Add option
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      </div>
                     </div>
+                    {currentQuestion && form.questions.length > 1 && (
+                      <div className="p-4 border-t border-gray-200">
+                        <button
+                          onClick={() => handleDeleteQuestion(currentQuestion.id)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <XMarkIcon className="w-5 h-5" />
+                          <span className="text-sm font-[family-name:var(--font-nunito)]">
+                            Delete question
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-                {currentQuestion && form.questions.length > 1 && (
-                  <div className="p-4 border-t border-gray-200">
-                    <button
-                      onClick={() => handleDeleteQuestion(currentQuestion.id)}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <XMarkIcon className="w-5 h-5" />
-                      <span className="text-sm font-[family-name:var(--font-nunito)]">
-                        Delete question
-                      </span>
-                    </button>
-                  </div>
-                )}
+              </>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-sm text-red-600 font-[family-name:var(--font-nunito)]">Failed to load form. Please try again.</p>
+                  <button
+                    onClick={handleClose}
+                    className="mt-4 px-4 py-2 text-sm text-gray-700 font-[family-name:var(--font-nunito)] hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    Go Back
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </motion.div>
         </div>
       </AnimatePresence>
