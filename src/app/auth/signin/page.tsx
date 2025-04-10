@@ -34,6 +34,7 @@ export default function SignIn() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsLoading(true);
     
     try {
@@ -55,6 +56,7 @@ export default function SignIn() {
         title: "Error",
         message: error.response?.data?.message || "Invalid email or password",
       });
+    } finally {
       setIsLoading(false);
     }
   };

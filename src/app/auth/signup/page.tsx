@@ -35,6 +35,7 @@ export default function SignUp() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsLoading(true);
     
     try {
@@ -56,6 +57,7 @@ export default function SignUp() {
         title: "Error",
         message: error.response?.data?.message || "Failed to create account",
       });
+    } finally {
       setIsLoading(false);
     }
   };

@@ -53,9 +53,9 @@ export default function Home() {
 
         <div className="h-20" />
         
-        {/* Beta announcement - moved to left */}
+        {/* Beta announcement - centered */}
         <motion.div
-          className="mt-6 mb-8 text-left"
+          className="mt-6 mb-8 text-center"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
@@ -69,17 +69,16 @@ export default function Home() {
           </div>
         </motion.div>
         
-        {/* Main content with left-right layout */}
-        <main className="flex flex-col md:flex-row items-start justify-between mt-2">
-          {/* Left side - Text content */}
+        {/* Main content centered */}
+        <main className="flex flex-col items-center justify-center mt-2 max-w-3xl mx-auto">
           <motion.div 
-            className="flex flex-col gap-6 md:gap-8 md:w-1/2 w-full"
+            className="flex flex-col gap-6 md:gap-8 w-full text-center"
             variants={containerVariants}
             initial="hidden"
             animate="visible"
           >
             <motion.h1 
-              className="text-4xl sm:text-5xl font-jedira leading-tight text-left"
+              className="text-4xl sm:text-5xl font-jedira leading-tight"
               variants={itemVariants}
             >
               <span className="bg-gradient-to-r from-black via-purple-700 to-black text-transparent bg-clip-text">
@@ -90,14 +89,14 @@ export default function Home() {
             </motion.h1>
             
             <motion.p 
-              className="text-base sm:text-lg tracking-[-.01em] text-left text-gray-600"
+              className="text-base sm:text-lg tracking-[-.01em] text-gray-600"
               variants={itemVariants}
             >
               Easily create stunning <span className="bg-gray-100 px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">event forms</span> and access powerful tools for managing attendance, late registrations, and user analytics.
             </motion.p>
 
             <motion.div 
-              className="flex gap-3 sm:gap-4 items-stretch flex-row w-full sm:w-auto mt-2 sm:mt-4"
+              className="flex gap-3 sm:gap-4 items-stretch justify-center flex-row w-full sm:w-auto mt-2 sm:mt-4"
               variants={itemVariants}
             >
               <motion.button
@@ -118,45 +117,6 @@ export default function Home() {
                 Learn More
               </motion.button>
             </motion.div>
-          </motion.div>
-
-          {/* Right side - Browser Frame with Dashboard Image */}
-          <motion.div 
-            className="hidden md:block md:w-1/2 pl-8"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <div className="relative w-full aspect-[16/10] bg-white rounded-xl overflow-hidden shadow-2xl">
-              {/* Browser Frame */}
-              <div className="absolute inset-x-0 top-0 h-10 bg-gray-50 border-b border-gray-200 flex items-center px-4 gap-2">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-gray-300" />
-                  <div className="w-3 h-3 rounded-full bg-gray-300" />
-                  <div className="w-3 h-3 rounded-full bg-gray-300" />
-                </div>
-                <div className="flex-1 mx-4">
-                  <div className="w-full h-6 bg-white rounded-md border border-gray-200 flex items-center px-3">
-                    <div className="w-4 h-4 rounded-full bg-gray-100" />
-                    <div className="h-2 w-32 bg-gray-100 rounded ml-2" />
-                  </div>
-                </div>
-              </div>
-              
-              {/* Dashboard Image without Blur Effect */}
-              <div className="absolute inset-0 mt-10">
-                <div className="relative w-full h-full">
-                  <Image
-                    src="/images/dash.png"
-                    alt="Dashboard Preview"
-                    fill
-                    className="object-contain object-top"
-                    quality={100}
-                    priority
-                  />
-                </div>
-              </div>
-            </div>
           </motion.div>
         </main>
       </div>
