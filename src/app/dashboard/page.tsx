@@ -85,6 +85,60 @@ const getInitials = (title: string | undefined) => {
 
 type Tab = 'overview' | 'submissions' | 'settings';
 
+interface Choice {
+  id: string;
+  text: string;
+  order: number;
+}
+
+interface Question {
+  id: string;
+  text: string;
+  type: string;
+  description?: string;
+  is_required: boolean;
+  order: number;
+  choices?: Choice[];
+}
+
+interface QuestionResponse {
+  question_id: string;
+  answer?: string;
+  choices?: string[];
+  response_data: any;
+  question: Question;
+}
+
+interface Submission {
+  id: string;
+  form_id: string;
+  email: string;
+  status: 'in_progress' | 'completed';
+  started_at: string;
+  completed_at: string | null;
+  completion_time: number | null;
+  metadata: {
+    user_agent?: string;
+    ip_address?: string;
+  };
+  question_responses: QuestionResponse[];
+}
+
+interface SubmissionsResponse {
+  submissions: Submission[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  form: {
+    id: string;
+    name: string;
+    questions: Question[];
+  };
+}
+
 interface AnalyticsModalProps {
   form: Form;
   onClose: () => void;
@@ -99,6 +153,79 @@ const AnalyticsModal = ({
   const [notifySubmitter, setNotifySubmitter] = useState(true);
   const [notifyOwner, setNotifyOwner] = useState(true);
   const [isFormEnabled, setIsFormEnabled] = useState(true);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const fetchSubmissions = async () => {
+    try {
+      setIsLoadingSubmissions(true);
+      const token = localStorage.getItem('token'); // Get token from localStorage
+
+      if (!token) {
+        showToast({
+          type: 'error',
+          title: 'Error',
+          message: 'You must be logged in to view submissions',
+          duration: 3000,
+        });
+        return;
+      }
+
+      const response = await apiClient.get<SubmissionsResponse>(
+        `workspaces/${form.workspace_id}/forms/${form.id}/submissions/list`,
+        {
+          params: {
+            page: pagination.page,
+            limit: pagination.limit,
+            sortBy,
+            sortOrder
+          },
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+      setSubmissions(response.data.submissions);
+      setPagination(response.data.pagination);
+    } catch (error: any) {
+      console.error('Failed to fetch submissions:', error);
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.message || 'Failed to load submissions',
+        duration: 3000,
+      });
+    } finally {
+      setIsLoadingSubmissions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'submissions') {
+      fetchSubmissions();
+    }
+  }, [activeTab, pagination.page, sortBy, sortOrder]);
+
+  const handlePageChange = (newPage: number) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleSortChange = (field: string) => {
+    if (field === sortBy) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('desc');
+    }
+  };
 
   const tabs: { id: Tab; name: string }[] = [
     { id: 'overview', name: 'Overview' },
@@ -106,11 +233,164 @@ const AnalyticsModal = ({
     { id: 'settings', name: 'Settings' },
   ];
 
-  const sampleSubmissions = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', submittedAt: '2024-03-15 14:30' },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', submittedAt: '2024-03-15 15:45' },
-    { id: 3, name: 'Mike Johnson', email: 'mike@example.com', submittedAt: '2024-03-16 09:15' },
-  ];
+  const renderSubmissionsTable = () => {
+    if (isLoadingSubmissions) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-8 h-8 border-2 border-gray-200 border-t-black rounded-full animate-spin" />
+        </div>
+      );
+    }
+
+    if (submissions.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-500 font-[family-name:var(--font-nunito)]">No submissions yet</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead>
+            <tr className="bg-gray-50">
+              <th 
+                scope="col" 
+                className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider font-[family-name:var(--font-nunito)] cursor-pointer"
+                onClick={() => handleSortChange('email')}
+              >
+                Email
+                {sortBy === 'email' && (
+                  <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </th>
+              <th 
+                scope="col" 
+                className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider font-[family-name:var(--font-nunito)] cursor-pointer"
+                onClick={() => handleSortChange('status')}
+              >
+                Status
+                {sortBy === 'status' && (
+                  <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </th>
+              <th 
+                scope="col" 
+                className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider font-[family-name:var(--font-nunito)] cursor-pointer"
+                onClick={() => handleSortChange('started_at')}
+              >
+                Started At
+                {sortBy === 'started_at' && (
+                  <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </th>
+              <th 
+                scope="col" 
+                className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider font-[family-name:var(--font-nunito)] cursor-pointer"
+                onClick={() => handleSortChange('completion_time')}
+              >
+                Completion Time
+                {sortBy === 'completion_time' && (
+                  <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {submissions.map((submission) => (
+              <tr key={submission.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
+                  {submission.email}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-[family-name:var(--font-nunito)]">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    submission.status === 'completed' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {submission.status === 'completed' ? 'Completed' : 'In Progress'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-[family-name:var(--font-nunito)]">
+                  {new Date(submission.started_at).toLocaleString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-[family-name:var(--font-nunito)]">
+                  {submission.completion_time 
+                    ? `${Math.round(submission.completion_time / 60)} minutes` 
+                    : '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-6 py-3 bg-white border-t border-gray-200">
+          <div className="flex-1 flex justify-between sm:hidden">
+            <button
+              onClick={() => handlePageChange(pagination.page - 1)}
+              disabled={pagination.page === 1}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => handlePageChange(pagination.page + 1)}
+              disabled={pagination.page === pagination.totalPages}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700 font-[family-name:var(--font-nunito)]">
+                Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{' '}
+                <span className="font-medium">
+                  {Math.min(pagination.page * pagination.limit, pagination.total)}
+                </span>{' '}
+                of <span className="font-medium">{pagination.total}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <button
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="sr-only">Previous</span>
+                  <ChevronDownIcon className="h-5 w-5 rotate-90" />
+                </button>
+                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                      page === pagination.page
+                        ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.totalPages}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="sr-only">Next</span>
+                  <ChevronDownIcon className="h-5 w-5 -rotate-90" />
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -119,21 +399,25 @@ const AnalyticsModal = ({
           <div className="space-y-8">
             <div className="grid grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-xl">
-                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Form Status</h4>
+                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Total Submissions</h4>
                 <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
-                  {form.is_private ? 'Private' : 'Public'}
+                  {pagination.total}
                 </p>
               </div>
               <div className="bg-white p-6 rounded-xl">
-                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Last Updated</h4>
+                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Completion Rate</h4>
                 <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
-                  {new Date(form.updated_at).toLocaleDateString()}
+                  {submissions.length > 0
+                    ? `${Math.round((submissions.filter(s => s.status === 'completed').length / submissions.length) * 100)}%`
+                    : '0%'}
                 </p>
               </div>
               <div className="bg-white p-6 rounded-xl">
-                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Created</h4>
+                <h4 className="text-sm font-medium text-gray-500 font-[family-name:var(--font-nunito)] mb-2">Avg. Completion Time</h4>
                 <p className="text-3xl font-medium text-gray-900 font-[family-name:var(--font-nunito)]">
-                  {new Date(form.created_at).toLocaleDateString()}
+                  {submissions.length > 0
+                    ? `${Math.round(submissions.reduce((acc, s) => acc + (s.completion_time || 0), 0) / submissions.length / 60)} min`
+                    : '-'}
                 </p>
               </div>
             </div>
@@ -153,34 +437,7 @@ const AnalyticsModal = ({
       case 'submissions':
         return (
           <div className="bg-white rounded-xl overflow-hidden border border-gray-200">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider font-[family-name:var(--font-nunito)]">Name</th>
-                    <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider font-[family-name:var(--font-nunito)]">Email</th>
-                    <th scope="col" className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider font-[family-name:var(--font-nunito)]">Submitted At</th>
-                    <th scope="col" className="relative px-6 py-4">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {sampleSubmissions.map((submission) => (
-                    <tr key={submission.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-[family-name:var(--font-nunito)]">{submission.name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-[family-name:var(--font-nunito)]">{submission.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-[family-name:var(--font-nunito)]">{submission.submittedAt}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <button className="text-gray-400 hover:text-gray-600">
-                          <EllipsisVerticalIcon className="w-5 h-5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {renderSubmissionsTable()}
           </div>
         );
       case 'settings':
