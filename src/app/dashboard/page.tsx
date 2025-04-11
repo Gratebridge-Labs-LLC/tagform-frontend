@@ -504,6 +504,7 @@ export default function Dashboard() {
       setIsLoading(true);
       const response = await apiClient.get<WorkspaceResponse>(`/workspaces?search=${debouncedSearchQuery}`);
       setWorkspaces(response.data.workspaces);
+      localStorage.setItem('workspaces', JSON.stringify(response.data.workspaces));
       
       // Only set active workspace and fetch forms if no workspace is currently selected
       if (!activeWorkspace && response.data.workspaces.length > 0) {
@@ -519,22 +520,33 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch workspaces when debounced search query changes
+  // Initialize workspaces and active workspace from localStorage on mount
   useEffect(() => {
-    if (!workspaces.length) {
-      fetchWorkspaces();
-    }
-  }, [debouncedSearchQuery]);
-
-  // Initialize active workspace from localStorage on mount
-  useEffect(() => {
+    const storedWorkspaces = localStorage.getItem('workspaces');
     const storedWorkspace = localStorage.getItem('activeWorkspace');
+    
+    if (storedWorkspaces) {
+      setWorkspaces(JSON.parse(storedWorkspaces));
+    }
+    
     if (storedWorkspace) {
       const workspace = JSON.parse(storedWorkspace);
       setActiveWorkspace(workspace);
       fetchForms(workspace.id);
     }
+    
+    // Only fetch workspaces if we don't have them in localStorage
+    if (!storedWorkspaces) {
+      fetchWorkspaces();
+    }
   }, []);
+
+  // Fetch workspaces only when search query changes and we're actually searching
+  useEffect(() => {
+    if (debouncedSearchQuery) {
+      fetchWorkspaces();
+    }
+  }, [debouncedSearchQuery]);
 
   const fetchForms = async (workspaceId: string) => {
     try {
@@ -938,6 +950,13 @@ export default function Dashboard() {
                               Edit
                             </Link>
                             <button 
+                              onClick={() => handleViewAnalytics(form)}
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
+                            >
+                              <ChartBarIcon className="w-4 h-4" />
+                              Analytics
+                            </button>
+                            <button 
                               onClick={() => handleCopyLink(form.id)}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
                             >
@@ -999,6 +1018,13 @@ export default function Dashboard() {
                                 <PencilIcon className="w-4 h-4" />
                                 Edit
                               </Link>
+                              <button 
+                                onClick={() => handleViewAnalytics(form)}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
+                              >
+                                <ChartBarIcon className="w-4 h-4" />
+                                Analytics
+                              </button>
                               <button 
                                 onClick={() => handleCopyLink(form.id)}
                                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-[family-name:var(--font-nunito)]"
